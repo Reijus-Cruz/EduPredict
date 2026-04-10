@@ -1,9 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Class Records – EduClassRecord{% endblock %}
+{% block title %}Class Records – PredictEd{% endblock %}
 
 {% block content %}
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
-    <h4 class="fw-bold mb-0"><i class="bi bi-journal-text me-2"></i>Class Records</h4>
+    <div>
+        <h4 class="fw-bold mb-0"><i class="bi bi-journal-text me-2"></i>Class Records</h4>
+        <small class="text-muted">{{ semesters[0] if semesters else '1st Semester' }} | {{ school_years[0] if school_years else 'AY 2025-2026' }}</small>
+    </div>
     <div class="d-flex flex-wrap gap-2">
         <a href="{{ url_for('export_class_records') }}" class="btn btn-success btn-sm"><i class="bi bi-file-earmark-excel me-1"></i>Export Excel</a>
         <button class="btn btn-outline-secondary btn-sm" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
@@ -40,9 +43,16 @@
     <div class="tab-pane fade show active" id="tab-records" role="tabpanel">
 {% endif %}
 
-        <!-- Term Filter -->
+        <!-- Filters -->
         <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-            <span class="fw-semibold text-muted small">Term:</span>
+            <span class="fw-semibold text-muted small">Section:</span>
+            <select class="form-select form-select-sm" id="sectionFilter" style="max-width:150px">
+                <option value="all">All Sections</option>
+                {% for sec in sections %}
+                <option value="{{ sec }}">{{ sec }}</option>
+                {% endfor %}
+            </select>
+            <span class="fw-semibold text-muted small ms-2">Term:</span>
             <div class="btn-group btn-group-sm" id="termFilter" role="group">
                 <button type="button" class="btn btn-outline-primary active" data-term="Prelim">Prelim</button>
                 <button type="button" class="btn btn-outline-primary" data-term="Midterm">Midterm</button>
@@ -100,7 +110,7 @@
                                 </thead>
                                 <tbody>
                                 {% for rec, student, subj in subj_records %}
-                                <tr data-term="{{ rec.term }}">
+                                <tr data-term="{{ rec.term }}" data-section="{{ student.section }}">
                                     <td class="row-num"></td>
                                     <td class="fw-medium">{{ student.name }}</td>
                                     <td class="d-none d-md-table-cell">{{ rec.class_standing }}</td>
@@ -169,6 +179,22 @@
                                 <option value="Prelim">Prelim</option>
                                 <option value="Midterm">Midterm</option>
                                 <option value="Finals">Finals</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="rec_semester" class="form-label">Semester</label>
+                            <select class="form-select" name="semester" id="rec_semester">
+                                <option value="1st Semester">1st Semester</option>
+                                <option value="2nd Semester">2nd Semester</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="rec_school_year" class="form-label">School Year</label>
+                            <select class="form-select" name="school_year" id="rec_school_year">
+                                <option value="AY 2025-2026">AY 2025-2026</option>
+                                <option value="AY 2026-2027">AY 2026-2027</option>
                             </select>
                         </div>
                     </div>
@@ -332,12 +358,17 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const termBtns = document.querySelectorAll('#termFilter [data-term]');
+    const sectionSelect = document.getElementById('sectionFilter');
     function getActiveTerm() {
         const active = document.querySelector('#termFilter .active');
         return active ? active.dataset.term : 'Prelim';
     }
+    function getActiveSection() {
+        return sectionSelect ? sectionSelect.value : 'all';
+    }
     function applyFilters() {
         const term = getActiveTerm();
+        const section = getActiveSection();
         const q = document.getElementById('recordSearch').value.toLowerCase();
         // Update exam column headers to match selected term
         document.querySelectorAll('.exam-header').forEach(th => {
@@ -345,9 +376,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         document.querySelectorAll('#subjectTabContent tbody tr[data-term]').forEach(row => {
             const termMatch = row.dataset.term === term;
+            const sectionMatch = section === 'all' || row.dataset.section === section;
             const name = row.cells[1] ? row.cells[1].textContent.toLowerCase() : '';
             const nameMatch = !q || name.includes(q);
-            row.style.display = (termMatch && nameMatch) ? '' : 'none';
+            row.style.display = (termMatch && sectionMatch && nameMatch) ? '' : 'none';
         });
         // Update row numbers
         document.querySelectorAll('#subjectTabContent table').forEach(table => {
@@ -360,15 +392,15 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
         // Update subject pill badges
-        const term2 = term;
         document.querySelectorAll('#subjectPills .nav-link').forEach(pill => {
             const target = pill.getAttribute('data-bs-target');
             const pane = document.querySelector(target);
             if (pane) {
                 let visible = 0;
-                pane.querySelectorAll('tbody tr[data-term="' + term2 + '"]').forEach(row => {
+                pane.querySelectorAll('tbody tr[data-term="' + term + '"]').forEach(row => {
                     const name = row.cells[1] ? row.cells[1].textContent.toLowerCase() : '';
-                    if (!q || name.includes(q)) visible++;
+                    const secMatch = section === 'all' || row.dataset.section === section;
+                    if (secMatch && (!q || name.includes(q))) visible++;
                 });
                 const badge = pill.querySelector('.badge');
                 if (badge) badge.textContent = visible;
@@ -382,6 +414,7 @@ document.addEventListener('DOMContentLoaded', function() {
             applyFilters();
         });
     });
+    if (sectionSelect) sectionSelect.addEventListener('change', applyFilters);
     document.getElementById('recordSearch').addEventListener('input', applyFilters);
     // Initialize with Prelim
     applyFilters();

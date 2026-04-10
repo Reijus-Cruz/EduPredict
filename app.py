@@ -13,7 +13,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'educlassrecord-dev-secret-key-2026'
+app.config['SECRET_KEY'] = 'predicted-dev-secret-key-2026'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'students.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -52,6 +52,8 @@ class Student(db.Model):
     name = db.Column(db.String(100), nullable=False)
     section = db.Column(db.String(20))
     year_level = db.Column(db.Integer)
+    semester = db.Column(db.String(20), default='1st Semester')
+    school_year = db.Column(db.String(20), default='AY 2025-2026')
     email = db.Column(db.String(100))
     is_scholar = db.Column(db.Boolean, default=False)
     is_working_student = db.Column(db.Boolean, default=False)
@@ -97,6 +99,8 @@ class ClassRecord(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
     term = db.Column(db.String(20))
+    semester = db.Column(db.String(20), default='1st Semester')
+    school_year = db.Column(db.String(20), default='AY 2025-2026')
     class_standing = db.Column(db.Float, default=0)     # Equiv % (weight 20%)
     exam_score = db.Column(db.Float, default=0)          # Equiv % (weight 50%)
     task_performance = db.Column(db.Float, default=0)    # Equiv % (weight 30%)
@@ -271,11 +275,11 @@ def _create_risk_notifications(student_id):
         record = ClassRecord.query.filter_by(student_id=student_id).order_by(ClassRecord.id.desc()).first()
         if record:
             pre = calculate_pre_exam_prediction(record.class_standing, record.task_performance)
-            sms_msg = (f'EduClassRecord Alert: {student.name} is HIGH RISK – max possible grade is '
+            sms_msg = (f'PredictEd Alert: {student.name} is HIGH RISK – max possible grade is '
                        f'{pre["max_possible_grade"]:.1f}% even with a perfect exam. '
                        f'Consultation with instructor is needed. Please login to view details.')
         else:
-            sms_msg = (f'EduClassRecord Alert: {student.name} is HIGH RISK of failing in '
+            sms_msg = (f'PredictEd Alert: {student.name} is HIGH RISK of failing in '
                        f'{", ".join(high_subjects)}. Please login to view details.')
         _send_sms(student.parent_phone, sms_msg)
         latest_notif = Notification.query.filter_by(
@@ -369,13 +373,31 @@ def dashboard():
 def students():
     page = request.args.get('page', 1, type=int)
     per_page = 15
-    pagination = Student.query.order_by(Student.name).paginate(page=page, per_page=per_page, error_out=False)
+    section_filter = request.args.get('section', 'all')
+    semester_filter = request.args.get('semester', 'all')
+    sy_filter = request.args.get('school_year', 'all')
+    query = Student.query
+    if section_filter != 'all':
+        query = query.filter_by(section=section_filter)
+    if semester_filter != 'all':
+        query = query.filter_by(semester=semester_filter)
+    if sy_filter != 'all':
+        query = query.filter_by(school_year=sy_filter)
+    pagination = query.order_by(Student.name).paginate(page=page, per_page=per_page, error_out=False)
     all_students = pagination.items
     predictions_map = {}
     for s in all_students:
         pred = Prediction.query.filter_by(student_id=s.id).order_by(Prediction.id.desc()).first()
         predictions_map[s.id] = pred
-    return render_template('students.html', students=all_students, predictions=predictions_map, pagination=pagination)
+    all_sections = db.session.query(Student.section).distinct().order_by(Student.section).all()
+    all_semesters = db.session.query(Student.semester).distinct().all()
+    all_school_years = db.session.query(Student.school_year).distinct().all()
+    return render_template('students.html', students=all_students, predictions=predictions_map,
+                           pagination=pagination, sections=[s[0] for s in all_sections],
+                           semesters=[s[0] for s in all_semesters],
+                           school_years=[s[0] for s in all_school_years],
+                           section_filter=section_filter, semester_filter=semester_filter,
+                           sy_filter=sy_filter)
 
 
 @app.route('/students/add', methods=['POST'])
@@ -385,6 +407,8 @@ def add_student():
         name = request.form.get('name', '').strip()
         section = request.form.get('section', '').strip()
         year_level = int(request.form.get('year_level', 1))
+        semester = request.form.get('semester', '1st Semester').strip()
+        school_year = request.form.get('school_year', 'AY 2025-2026').strip()
         email = request.form.get('email', '').strip()
         is_scholar = request.form.get('is_scholar') == 'on'
         is_working = request.form.get('is_working_student') == 'on'
@@ -395,6 +419,7 @@ def add_student():
             return redirect(url_for('students'))
         student = Student(
             name=name, section=section, year_level=year_level,
+            semester=semester, school_year=school_year,
             email=email, is_scholar=is_scholar, is_working_student=is_working,
             parent_name=parent_name, parent_phone=parent_phone,
         )
@@ -513,6 +538,8 @@ def class_records():
                 student_id=student_id,
                 subject_id=int(request.form['subject_id']),
                 term=request.form['term'],
+                semester=request.form.get('semester', '1st Semester'),
+                school_year=request.form.get('school_year', 'AY 2025-2026'),
                 class_standing=cs,
                 exam_score=exam,
                 task_performance=tp,
@@ -545,9 +572,15 @@ def class_records():
 
     all_students = Student.query.order_by(Student.name).all()
     all_subjects = Subject.query.order_by(Subject.name).all()
+    all_sections = db.session.query(Student.section).distinct().order_by(Student.section).all()
+    all_semesters = db.session.query(ClassRecord.semester).distinct().all()
+    all_school_years = db.session.query(ClassRecord.school_year).distinct().all()
     return render_template('class_records.html',
                            records_by_subject=records_by_subject,
-                           students=all_students, subjects=all_subjects)
+                           students=all_students, subjects=all_subjects,
+                           sections=[s[0] for s in all_sections],
+                           semesters=[s[0] for s in all_semesters if s[0]],
+                           school_years=[s[0] for s in all_school_years if s[0]])
 
 
 @app.route('/class-records/<int:record_id>/edit', methods=['POST'])

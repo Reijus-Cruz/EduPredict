@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ student.name }} – EduClassRecord{% endblock %}
+{% block title %}{{ student.name }} – PredictEd{% endblock %}
 {% block head_extra %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 {% endblock %}
@@ -14,25 +14,37 @@
 
 <!-- Info Cards -->
 <div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md-2">
         <div class="card stat-card h-100"><div class="card-body">
             <div class="text-muted small text-uppercase fw-semibold">Section</div>
             <div class="fs-4 fw-bold mt-1">{{ student.section }}</div>
         </div></div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md-2">
         <div class="card stat-card h-100"><div class="card-body">
             <div class="text-muted small text-uppercase fw-semibold">Year Level</div>
             <div class="fs-4 fw-bold mt-1">{{ student.year_level }}</div>
         </div></div>
     </div>
-    <div class="col-12 col-md-3">
+    <div class="col-6 col-md-2">
         <div class="card stat-card h-100"><div class="card-body">
-            <div class="text-muted small text-uppercase fw-semibold">Email</div>
-            <div class="fw-medium mt-1 text-truncate">{{ student.email }}</div>
+            <div class="text-muted small text-uppercase fw-semibold">Semester</div>
+            <div class="fw-bold mt-1">{{ student.semester }}</div>
         </div></div>
     </div>
-    <div class="col-12 col-md-3">
+    <div class="col-6 col-md-2">
+        <div class="card stat-card h-100"><div class="card-body">
+            <div class="text-muted small text-uppercase fw-semibold">School Year</div>
+            <div class="fw-bold mt-1">{{ student.school_year }}</div>
+        </div></div>
+    </div>
+    <div class="col-12 col-md-2">
+        <div class="card stat-card h-100"><div class="card-body">
+            <div class="text-muted small text-uppercase fw-semibold">Email</div>
+            <div class="fw-medium mt-1 text-truncate small">{{ student.email }}</div>
+        </div></div>
+    </div>
+    <div class="col-12 col-md-2">
         <div class="card stat-card h-100"><div class="card-body">
             <div class="text-muted small text-uppercase fw-semibold">Status</div>
             <div class="mt-1">

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Students – EduClassRecord{% endblock %}
+{% block title %}Students – PredictEd{% endblock %}
 
 {% block content %}
 {% from '_pagination.html' import render_pagination %}
@@ -12,11 +12,44 @@
     </div>
 </div>
 
-<!-- Search Bar -->
-<div class="mb-3">
-    <div class="input-group">
-        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-        <input type="text" class="form-control" id="studentSearch" placeholder="Search student by name..." autofocus>
+<!-- Filters Row -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-auto">
+                <label class="form-label small text-muted mb-0">Section</label>
+                <select class="form-select form-select-sm" name="section" onchange="this.form.submit()">
+                    <option value="all">All Sections</option>
+                    {% for sec in sections %}
+                    <option value="{{ sec }}" {% if section_filter == sec %}selected{% endif %}>{{ sec }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label small text-muted mb-0">Semester</label>
+                <select class="form-select form-select-sm" name="semester" onchange="this.form.submit()">
+                    <option value="all">All Semesters</option>
+                    {% for sem in semesters %}
+                    <option value="{{ sem }}" {% if semester_filter == sem %}selected{% endif %}>{{ sem }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label small text-muted mb-0">School Year</label>
+                <select class="form-select form-select-sm" name="school_year" onchange="this.form.submit()">
+                    <option value="all">All Years</option>
+                    {% for sy in school_years %}
+                    <option value="{{ sy }}" {% if sy_filter == sy %}selected{% endif %}>{{ sy }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" id="studentSearch" placeholder="Search by name..." autofocus>
+                </div>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -29,8 +62,8 @@
                         <th>#</th>
                         <th>Name</th>
                         <th class="d-none d-md-table-cell">Section</th>
-                        <th class="d-none d-md-table-cell">Year</th>
-                        <th class="d-none d-lg-table-cell">Email</th>
+                        <th class="d-none d-lg-table-cell">Semester</th>
+                        <th class="d-none d-lg-table-cell">School Year</th>
                         <th>Risk Status</th>
                         <th></th>
                     </tr>
@@ -38,11 +71,11 @@
                 <tbody>
                 {% for s in students %}
                 <tr>
-                    <td class="text-muted small">{{ s.id }}</td>
+                    <td class="text-muted small">{{ loop.index + (pagination.page - 1) * pagination.per_page }}</td>
                     <td class="fw-medium">{{ s.name }}</td>
-                    <td class="d-none d-md-table-cell">{{ s.section }}</td>
-                    <td class="d-none d-md-table-cell">{{ s.year_level }}</td>
-                    <td class="d-none d-lg-table-cell small text-muted">{{ s.email }}</td>
+                    <td class="d-none d-md-table-cell"><span class="badge bg-secondary bg-opacity-25 text-dark">{{ s.section }}</span></td>
+                    <td class="d-none d-lg-table-cell small">{{ s.semester }}</td>
+                    <td class="d-none d-lg-table-cell small">{{ s.school_year }}</td>
                     <td>
                         {% if predictions[s.id] %}
                         <span class="badge badge-{{ predictions[s.id].risk_level|lower }}">{{ predictions[s.id].risk_level }}</span>
@@ -57,7 +90,10 @@
                     </td>
                     <td class="text-end">
                         <div class="d-flex gap-1 justify-content-end">
-                            <a href="{{ url_for('student_profile', student_id=s.id) }}" class="btn btn-sm btn-outline-primary">
+                            <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#quickView{{ s.id }}" title="Quick View">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            <a href="{{ url_for('student_profile', student_id=s.id) }}" class="btn btn-sm btn-outline-primary" title="Full Profile">
                                 <i class="bi bi-person-lines-fill d-md-none"></i>
                                 <span class="d-none d-md-inline">Profile</span>
                             </a>
@@ -75,6 +111,76 @@
 </div>
 
 {{ render_pagination(pagination, 'students') }}
+
+<!-- Quick View Modals -->
+{% for s in students %}
+<div class="modal fade" id="quickView{{ s.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h6 class="modal-title"><i class="bi bi-person-badge me-1"></i>{{ s.name }}</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-6">
+                        <div class="text-muted small">Section</div>
+                        <div class="fw-medium">{{ s.section }}</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-muted small">Year Level</div>
+                        <div class="fw-medium">{{ s.year_level }}</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-muted small">Semester</div>
+                        <div class="fw-medium">{{ s.semester }}</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-muted small">School Year</div>
+                        <div class="fw-medium">{{ s.school_year }}</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="text-muted small">Email</div>
+                        <div class="fw-medium">{{ s.email or '—' }}</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-muted small">Scholar</div>
+                        <div>{% if s.is_scholar %}<span class="badge bg-success">Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-muted small">Working Student</div>
+                        <div>{% if s.is_working_student %}<span class="badge bg-warning text-dark">Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</div>
+                    </div>
+                    <div class="col-12"><hr class="my-1"></div>
+                    <div class="col-6">
+                        <div class="text-muted small">Parent/Guardian</div>
+                        <div class="fw-medium">{{ s.parent_name or '—' }}</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-muted small">Parent Phone</div>
+                        <div class="fw-medium">{{ s.parent_phone or '—' }}</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="text-muted small">Risk Status</div>
+                        {% if predictions[s.id] %}
+                        <span class="badge badge-{{ predictions[s.id].risk_level|lower }} mt-1">{{ predictions[s.id].risk_level }} Risk</span>
+                        {% if predictions[s.id].max_possible_grade is not none %}
+                        <span class="ms-1 small text-muted">Max possible: {{ predictions[s.id].max_possible_grade }}%</span>
+                        {% endif %}
+                        {% else %}
+                        <span class="text-muted">No prediction yet</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                <a href="{{ url_for('student_profile', student_id=s.id) }}" class="btn btn-primary btn-sm"><i class="bi bi-person-lines-fill me-1"></i>Full Profile</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
 
 <!-- Delete Confirmation Modals -->
 {% for s in students %}
@@ -112,12 +218,16 @@
                 <div class="modal-body">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label for="name" class="form-label">Full Name <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="name" name="name" required>
+                            <label for="name" class="form-label">Full Name (Surname, First Name) <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="name" name="name" placeholder="e.g. Dela Cruz, Juan" required>
                         </div>
                         <div class="col-md-3">
                             <label for="section" class="form-label">Section</label>
-                            <input type="text" class="form-control" id="section" name="section" placeholder="e.g. A">
+                            <select class="form-select" id="section" name="section">
+                                <option value="BSIT 3E">BSIT 3E</option>
+                                <option value="BSIT 3F">BSIT 3F</option>
+                                <option value="BSIT 3G">BSIT 3G</option>
+                            </select>
                         </div>
                         <div class="col-md-3">
                             <label for="year_level" class="form-label">Year Level</label>
@@ -126,6 +236,20 @@
                                 <option value="2">2nd Year</option>
                                 <option value="3">3rd Year</option>
                                 <option value="4">4th Year</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="semester" class="form-label">Semester</label>
+                            <select class="form-select" id="semester" name="semester">
+                                <option value="1st Semester">1st Semester</option>
+                                <option value="2nd Semester">2nd Semester</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="school_year" class="form-label">School Year</label>
+                            <select class="form-select" id="school_year" name="school_year">
+                                <option value="AY 2025-2026">AY 2025-2026</option>
+                                <option value="AY 2026-2027">AY 2026-2027</option>
                             </select>
                         </div>
                         <div class="col-md-6">
