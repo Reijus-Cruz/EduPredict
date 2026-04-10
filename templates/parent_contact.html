@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Contact Information – EduPredict{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-telephone me-2"></i>Contact Information</h4>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-pencil-square me-2"></i>Update Contact Details</div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    Keep your contact information up to date to receive SMS notifications when your child is at risk of failing.
+                </p>
+                <form method="POST" action="{{ url_for('parent_contact') }}">
+                    <div class="mb-3">
+                        <label for="parent_name" class="form-label fw-semibold">Parent/Guardian Name</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person"></i></span>
+                            <input type="text" class="form-control" id="parent_name" name="parent_name"
+                                   value="{{ student.parent_name or '' }}" placeholder="Full name">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="phone" class="form-label fw-semibold">Phone Number <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-phone"></i></span>
+                            <input type="tel" class="form-control" id="phone" name="phone"
+                                   value="{{ student.parent_phone or '' }}"
+                                   placeholder="+639171234567" required>
+                        </div>
+                        <div class="form-text">Enter a valid mobile number with country code (e.g., +639171234567)</div>
+                    </div>
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-save me-1"></i>Save Contact Info</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-info-circle me-2"></i>Current Information</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="text-muted small text-uppercase fw-semibold">Student</div>
+                    <div class="fs-5 fw-bold">{{ student.name }}</div>
+                </div>
+                <div class="mb-3">
+                    <div class="text-muted small text-uppercase fw-semibold">Section</div>
+                    <div>{{ student.section }} – Year {{ student.year_level }}</div>
+                </div>
+                <div class="mb-3">
+                    <div class="text-muted small text-uppercase fw-semibold">Parent/Guardian</div>
+                    <div>{{ student.parent_name or 'Not set' }}</div>
+                </div>
+                <div class="mb-3">
+                    <div class="text-muted small text-uppercase fw-semibold">SMS Contact</div>
+                    <div>
+                        {% if student.parent_phone %}
+                        <span class="text-success"><i class="bi bi-check-circle me-1"></i>{{ student.parent_phone }}</span>
+                        {% else %}
+                        <span class="text-danger"><i class="bi bi-x-circle me-1"></i>Not set – SMS notifications disabled</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="alert alert-info small mb-0">
+                    <i class="bi bi-info-circle me-1"></i>
+                    You will receive SMS alerts when your child is identified as <strong>HIGH RISK</strong> of failing in any subject.
+                    In-app notifications are sent for both High and Medium risk levels.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

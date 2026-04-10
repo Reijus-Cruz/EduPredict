@@ -1,0 +1,46 @@
+
+students (
+  student_id    INT PRIMARY KEY,
+  name          VARCHAR(100),
+  section       VARCHAR(20),
+  year_level    INT,
+  email         VARCHAR(100),
+  created_at    TIMESTAMP
+)
+
+subjects (
+  subject_id    INT PRIMARY KEY,
+  subject_name  VARCHAR(100),
+  description   TEXT
+)
+
+class_records (
+  record_id     INT PRIMARY KEY,
+  student_id    INT REFERENCES students,
+  subject_id    INT REFERENCES subjects,
+  term          VARCHAR(20),       -- 'Prelim', 'Midterm', 'Finals'
+  quiz_avg      DECIMAL(5,2),
+  exam_score    DECIMAL(5,2),
+  assignment_avg DECIMAL(5,2),
+  attendance    DECIMAL(5,2),      -- percentage
+  final_grade   DECIMAL(5,2),
+  recorded_at   TIMESTAMP
+)
+
+predictions (
+  prediction_id INT PRIMARY KEY,
+  student_id    INT REFERENCES students,
+  subject_id    INT REFERENCES subjects,
+  risk_level    VARCHAR(10),       -- 'Low', 'Medium', 'High'
+  predicted_grade DECIMAL(5,2),
+  confidence    DECIMAL(3,2),
+  generated_at  TIMESTAMP
+)
+
+recommendations (
+  rec_id        INT PRIMARY KEY,
+  prediction_id INT REFERENCES predictions,
+  message       TEXT,              -- e.g. "Focus on algebra exercises"
+  strategy_type VARCHAR(50),       -- 'Tutoring', 'Extra Activity', 'Counseling'
+  created_at    TIMESTAMP
+)

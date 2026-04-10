@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Interventions – EduPredict{% endblock %}
+
+{% block content %}
+{% from '_pagination.html' import render_pagination %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-clipboard2-pulse me-2"></i>Interventions</h4>
+</div>
+
+<!-- Status Filters -->
+<div class="filter-pills mb-3">
+    <a href="{{ url_for('interventions', status='all') }}" class="btn btn-sm {% if status_filter == 'all' %}btn-dark{% else %}btn-outline-secondary{% endif %}">All</a>
+    <a href="{{ url_for('interventions', status='pending') }}" class="btn btn-sm {% if status_filter == 'pending' %}btn-warning{% else %}btn-outline-warning{% endif %}">Pending</a>
+    <a href="{{ url_for('interventions', status='in_progress') }}" class="btn btn-sm {% if status_filter == 'in_progress' %}btn-info{% else %}btn-outline-info{% endif %}">In Progress</a>
+    <a href="{{ url_for('interventions', status='completed') }}" class="btn btn-sm {% if status_filter == 'completed' %}btn-success{% else %}btn-outline-success{% endif %}">Completed</a>
+    <a href="{{ url_for('interventions', status='ignored') }}" class="btn btn-sm {% if status_filter == 'ignored' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Ignored</a>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-journal-medical me-2"></i>Intervention Log</span>
+        <span class="badge bg-secondary">{{ pagination.total }}</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Student</th>
+                        <th class="d-none d-md-table-cell">Recommendation</th>
+                        <th>Status</th>
+                        <th class="d-none d-md-table-cell">Outcome</th>
+                        <th class="d-none d-lg-table-cell">Notes</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for log, rec, pred, student in data %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('student_profile', student_id=student.id) }}" class="fw-medium text-decoration-none">{{ student.name }}</a>
+                    </td>
+                    <td class="d-none d-md-table-cell" style="max-width:280px;">
+                        <span class="badge bg-light text-dark border mb-1">{{ rec.strategy_type }}</span><br>
+                        <small class="text-muted">{{ rec.message[:100] }}{% if rec.message|length > 100 %}…{% endif %}</small>
+                    </td>
+                    <td>
+                        <span class="badge {% if log.status == 'pending' %}bg-warning-subtle text-warning{% elif log.status == 'completed' %}bg-success-subtle text-success{% elif log.status == 'in_progress' %}bg-info-subtle text-info{% else %}bg-secondary-subtle text-secondary{% endif %}">
+                            {{ log.status|replace('_', ' ')|title }}
+                        </span>
+                    </td>
+                    <td class="d-none d-md-table-cell">{{ (log.outcome or '—')|replace('_', ' ')|title }}</td>
+                    <td class="d-none d-lg-table-cell small text-muted">{{ log.notes or '—' }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('update_intervention', log_id=log.id) }}" class="d-flex flex-column gap-1" style="min-width:140px;">
+                            <select name="status" class="form-select form-select-sm">
+                                {% for st in ['pending','in_progress','completed','ignored'] %}
+                                <option value="{{ st }}" {{ 'selected' if log.status == st }}>{{ st|replace('_',' ')|title }}</option>
+                                {% endfor %}
+                            </select>
+                            <select name="outcome" class="form-select form-select-sm">
+                                <option value="">-- outcome --</option>
+                                {% for oc in ['improved','no_change','declined'] %}
+                                <option value="{{ oc }}" {{ 'selected' if log.outcome == oc }}>{{ oc|replace('_',' ')|title }}</option>
+                                {% endfor %}
+                            </select>
+                            <input name="notes" class="form-control form-control-sm" placeholder="Notes..." value="{{ log.notes or '' }}">
+                            <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-check-lg"></i> Update</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{{ render_pagination(pagination, 'interventions', {'status': status_filter}) }}
+{% endblock %}

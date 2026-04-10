@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – EduPredict{% endblock %}
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-speedometer2 me-2"></i>Dashboard</h4>
+    {% if current_user.is_staff %}
+    <form method="POST" action="{{ url_for('run_prediction') }}">
+        <button class="btn btn-primary btn-sm"><i class="bi bi-arrow-repeat me-1"></i> Run Predictions</button>
+    </form>
+    {% endif %}
+</div>
+
+<!-- Stat Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-4 col-xl">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="text-muted small text-uppercase fw-semibold">Total Students</div>
+                <div class="fs-2 fw-bold mt-1">{{ total_students }}</div>
+            </div>
+            <div class="card-footer bg-transparent border-0 pt-0">
+                <span class="badge bg-primary bg-opacity-10 text-primary"><i class="bi bi-people"></i> Enrolled</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl">
+        <div class="card stat-card h-100 border-start border-danger border-4">
+            <div class="card-body">
+                <div class="text-muted small text-uppercase fw-semibold">High Risk</div>
+                <div class="fs-2 fw-bold text-danger mt-1">{{ high_risk }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl">
+        <div class="card stat-card h-100 border-start border-warning border-4">
+            <div class="card-body">
+                <div class="text-muted small text-uppercase fw-semibold">Medium Risk</div>
+                <div class="fs-2 fw-bold text-warning mt-1">{{ medium_risk }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl">
+        <div class="card stat-card h-100 border-start border-success border-4">
+            <div class="card-body">
+                <div class="text-muted small text-uppercase fw-semibold">Low Risk</div>
+                <div class="fs-2 fw-bold text-success mt-1">{{ low_risk }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl">
+        <div class="card stat-card h-100 border-start border-info border-4">
+            <div class="card-body">
+                <div class="text-muted small text-uppercase fw-semibold">Pending Interventions</div>
+                <div class="fs-2 fw-bold text-info mt-1">{{ pending_interventions }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header"><i class="bi bi-pie-chart me-2"></i>Risk Distribution</div>
+            <div class="card-body d-flex align-items-center justify-content-center">
+                <div class="chart-box" style="max-width:300px;"><canvas id="riskChart"></canvas></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header"><i class="bi bi-bar-chart me-2"></i>Risk Breakdown</div>
+            <div class="card-body"><canvas id="riskBar"></canvas></div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Predictions -->
+<div class="card mb-4">
+    <div class="card-header"><i class="bi bi-clock-history me-2"></i>Recent Predictions</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Student</th>
+                        <th>Risk Level</th>
+                        <th class="d-none d-md-table-cell">Max Possible %</th>
+                        <th class="d-none d-lg-table-cell">Exam Needed</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for pred, student in recent_predictions %}
+                <tr>
+                    <td class="fw-medium">{{ student.name }}</td>
+                    <td>
+                        <span class="badge badge-{{ pred.risk_level|lower }}">{{ pred.risk_level }}</span>
+                        {% if pred.risk_level == 'High' and pred.max_possible_grade is not none %}
+                        <br><small class="text-danger">Max {{ pred.max_possible_grade }}% even with perfect exam</small>
+                        {% endif %}
+                    </td>
+                    <td class="d-none d-md-table-cell">
+                        {% if pred.max_possible_grade is not none %}{{ pred.max_possible_grade }}%{% else %}—{% endif %}
+                    </td>
+                    <td class="d-none d-lg-table-cell">
+                        {% if pred.exam_needed is not none %}
+                            {% if pred.exam_needed > 100 %}
+                            <span class="text-danger fw-bold">Not achievable</span>
+                            {% elif pred.exam_needed > 85 %}
+                            <span class="text-warning fw-bold">{{ pred.exam_needed_raw }}/{{ pred.exam_max_items }}</span>
+                            <br><small class="text-muted">{{ pred.exam_needed }}%</small>
+                            {% else %}
+                            <span class="fw-medium">{{ pred.exam_needed_raw }}/{{ pred.exam_max_items }}</span>
+                            <br><small class="text-muted">{{ pred.exam_needed }}%</small>
+                            {% endif %}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td class="text-end">
+                        <a href="{{ url_for('student_profile', student_id=student.id) }}" class="btn btn-sm btn-outline-primary">View</a>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+fetch('/api/dashboard/risk-distribution')
+    .then(r => r.json())
+    .then(data => {
+        new Chart(document.getElementById('riskChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['High Risk', 'Medium Risk', 'Low Risk'],
+                datasets: [{ data: [data.High, data.Medium, data.Low], backgroundColor: ['#ef4444','#f59e0b','#10b981'] }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        });
+        new Chart(document.getElementById('riskBar'), {
+            type: 'bar',
+            data: {
+                labels: ['High Risk', 'Medium Risk', 'Low Risk'],
+                datasets: [{ label: 'Students', data: [data.High, data.Medium, data.Low], backgroundColor: ['#ef4444','#f59e0b','#10b981'] }]
+            },
+            options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+        });
+    });
+</script>
+{% endblock %}

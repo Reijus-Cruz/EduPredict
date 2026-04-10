@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Students – EduPredict{% endblock %}
+
+{% block content %}
+{% from '_pagination.html' import render_pagination %}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-people me-2"></i>Students</h4>
+    <div class="d-flex gap-2 align-items-center">
+        <span class="badge bg-primary bg-opacity-10 text-primary">{{ pagination.total }} enrolled</span>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addStudentModal"><i class="bi bi-person-plus me-1"></i>Add Student</button>
+    </div>
+</div>
+
+<!-- Search Bar -->
+<div class="mb-3">
+    <div class="input-group">
+        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+        <input type="text" class="form-control" id="studentSearch" placeholder="Search student by name..." autofocus>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Name</th>
+                        <th class="d-none d-md-table-cell">Section</th>
+                        <th class="d-none d-md-table-cell">Year</th>
+                        <th class="d-none d-lg-table-cell">Email</th>
+                        <th>Risk Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for s in students %}
+                <tr>
+                    <td class="text-muted small">{{ s.id }}</td>
+                    <td class="fw-medium">{{ s.name }}</td>
+                    <td class="d-none d-md-table-cell">{{ s.section }}</td>
+                    <td class="d-none d-md-table-cell">{{ s.year_level }}</td>
+                    <td class="d-none d-lg-table-cell small text-muted">{{ s.email }}</td>
+                    <td>
+                        {% if predictions[s.id] %}
+                        <span class="badge badge-{{ predictions[s.id].risk_level|lower }}">{{ predictions[s.id].risk_level }}</span>
+                        {% if predictions[s.id].risk_level == 'High' and predictions[s.id].max_possible_grade is not none %}
+                        <br><small class="text-danger">Max {{ predictions[s.id].max_possible_grade }}%</small>
+                        {% elif predictions[s.id].exam_needed is not none %}
+                        <br><small class="text-muted">Needs {{ predictions[s.id].exam_needed_raw }}/{{ predictions[s.id].exam_max_items }} on exam</small>
+                        {% endif %}
+                        {% else %}
+                        <span class="text-muted small">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <div class="d-flex gap-1 justify-content-end">
+                            <a href="{{ url_for('student_profile', student_id=s.id) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-person-lines-fill d-md-none"></i>
+                                <span class="d-none d-md-inline">Profile</span>
+                            </a>
+                            <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ s.id }}" title="Remove student">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{{ render_pagination(pagination, 'students') }}
+
+<!-- Delete Confirmation Modals -->
+{% for s in students %}
+<div class="modal fade" id="deleteModal{{ s.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h6 class="modal-title"><i class="bi bi-exclamation-triangle me-1"></i>Remove Student</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to remove <strong>{{ s.name }}</strong>?</p>
+                <p class="text-muted small mb-0">This will permanently delete all grades, predictions, and related data for this student.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" action="{{ url_for('delete_student', student_id=s.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-trash me-1"></i>Remove</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Add Student Modal -->
+<div class="modal fade" id="addStudentModal" tabindex="-1" aria-labelledby="addStudentLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addStudentLabel"><i class="bi bi-person-plus me-2"></i>Add New Student</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_student') }}">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="name" class="form-label">Full Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="name" name="name" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="section" class="form-label">Section</label>
+                            <input type="text" class="form-control" id="section" name="section" placeholder="e.g. A">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="year_level" class="form-label">Year Level</label>
+                            <select class="form-select" id="year_level" name="year_level">
+                                <option value="1">1st Year</option>
+                                <option value="2">2nd Year</option>
+                                <option value="3">3rd Year</option>
+                                <option value="4">4th Year</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" name="email">
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="is_scholar" name="is_scholar">
+                                <label class="form-check-label" for="is_scholar">Scholar</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="is_working_student" name="is_working_student">
+                                <label class="form-check-label" for="is_working_student">Working Student</label>
+                            </div>
+                        </div>
+                        <div class="col-12"><hr class="my-1"><h6 class="text-muted small text-uppercase">Parent / Guardian</h6></div>
+                        <div class="col-md-6">
+                            <label for="parent_name" class="form-label">Parent Name</label>
+                            <input type="text" class="form-control" id="parent_name" name="parent_name">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="parent_phone" class="form-label">Parent Phone</label>
+                            <input type="text" class="form-control" id="parent_phone" name="parent_phone" placeholder="+639XXXXXXXXX">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Add Student</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('studentSearch').addEventListener('input', function() {
+    const q = this.value.toLowerCase();
+    document.querySelectorAll('table tbody tr').forEach(row => {
+        const name = row.cells[1] ? row.cells[1].textContent.toLowerCase() : '';
+        row.style.display = name.includes(q) ? '' : 'none';
+    });
+});
+</script>
+{% endblock %}

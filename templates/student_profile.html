@@ -1,0 +1,381 @@
+{% extends "base.html" %}
+{% block title %}{{ student.name }} – EduPredict{% endblock %}
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-person-badge me-2"></i>{{ student.name }}</h4>
+    {% if current_user.is_staff %}
+    <a href="{{ url_for('students') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+    {% endif %}
+</div>
+
+<!-- Info Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card stat-card h-100"><div class="card-body">
+            <div class="text-muted small text-uppercase fw-semibold">Section</div>
+            <div class="fs-4 fw-bold mt-1">{{ student.section }}</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card stat-card h-100"><div class="card-body">
+            <div class="text-muted small text-uppercase fw-semibold">Year Level</div>
+            <div class="fs-4 fw-bold mt-1">{{ student.year_level }}</div>
+        </div></div>
+    </div>
+    <div class="col-12 col-md-3">
+        <div class="card stat-card h-100"><div class="card-body">
+            <div class="text-muted small text-uppercase fw-semibold">Email</div>
+            <div class="fw-medium mt-1 text-truncate">{{ student.email }}</div>
+        </div></div>
+    </div>
+    <div class="col-12 col-md-3">
+        <div class="card stat-card h-100"><div class="card-body">
+            <div class="text-muted small text-uppercase fw-semibold">Status</div>
+            <div class="mt-1">
+                {% if student.is_scholar %}<span class="badge bg-success-subtle text-success"><i class="bi bi-award"></i> Scholar</span>{% endif %}
+                {% if student.is_working_student %}<span class="badge bg-warning-subtle text-warning"><i class="bi bi-briefcase"></i> Working</span>{% endif %}
+                {% if not student.is_scholar and not student.is_working_student %}<span class="text-muted small">Regular</span>{% endif %}
+            </div>
+        </div></div>
+    </div>
+</div>
+
+{% if student.parent_name or student.parent_phone %}
+<div class="card mb-4">
+    <div class="card-body py-2 d-flex flex-wrap gap-3 align-items-center">
+        <span class="text-muted small"><i class="bi bi-people me-1"></i>Parent/Guardian:</span>
+        <span class="fw-medium">{{ student.parent_name or '—' }}</span>
+        {% if student.parent_phone %}
+        <span class="badge bg-success-subtle text-success"><i class="bi bi-phone me-1"></i>{{ student.parent_phone }}</span>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Accordion Sections -->
+<div class="accordion" id="profileAccordion">
+
+    <!-- Pre-Exam Prediction -->
+    {% if pre_exam_data %}
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePreExam">
+                <i class="bi bi-calculator me-2 text-primary"></i>Pre-Exam Prediction – Minimum Exam Grade to Pass
+            </button>
+        </h2>
+        <div id="collapsePreExam" class="accordion-collapse collapse show" data-bs-parent="#profileAccordion">
+            <div class="accordion-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Subject</th>
+                                <th>Term</th>
+                                <th class="d-none d-md-table-cell">Class Standing</th>
+                                <th class="d-none d-md-table-cell">Task Perf.</th>
+                                <th class="d-none d-md-table-cell">Attendance</th>
+                                <th>Min Exam Needed</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for pe in pre_exam_data %}
+                        <tr>
+                            <td class="fw-medium">{{ pe.subject_name }}</td>
+                            <td>{{ pe.term }}</td>
+                            <td class="d-none d-md-table-cell">{{ pe.class_standing }}</td>
+                            <td class="d-none d-md-table-cell">{{ pe.task_performance }}</td>
+                            <td class="d-none d-md-table-cell">{{ pe.attendance }}%</td>
+                            <td>
+                                {% if pe.achievable %}
+                                <span class="fw-bold {% if pe.exam_needed > 90 %}text-danger{% elif pe.exam_needed > 75 %}text-warning{% else %}text-success{% endif %}">
+                                    {{ pe.exam_needed_raw }}/{{ pe.exam_max_items }}
+                                </span>
+                                <br><small class="text-muted">{{ pe.exam_needed }}%</small>
+                                {% else %}
+                                <span class="fw-bold text-danger">{{ pe.exam_max_items }}/{{ pe.exam_max_items }}+</span>
+                                <br><small class="text-muted">Not achievable</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if not pe.achievable %}
+                                <span class="badge bg-danger-subtle text-danger"><i class="bi bi-x-circle me-1"></i>Cannot pass by exam alone</span>
+                                {% elif pe.exam_needed > 90 %}
+                                <span class="badge bg-danger-subtle text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Critical – needs extra help</span>
+                                {% elif pe.exam_needed > 75 %}
+                                <span class="badge bg-warning-subtle text-warning"><i class="bi bi-exclamation-circle me-1"></i>Must pass exam</span>
+                                {% elif pe.exam_needed > 0 %}
+                                <span class="badge bg-success-subtle text-success"><i class="bi bi-check-circle me-1"></i>On track</span>
+                                {% else %}
+                                <span class="badge bg-success-subtle text-success"><i class="bi bi-check-circle me-1"></i>Already passing</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="px-3 py-2 bg-light border-top small text-muted">
+                    <i class="bi bi-info-circle me-1"></i>Grade formula: Class Standing (20%) + Task Performance (30%) + Examination (50%). Passing grade: 75.
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Risk Assessment -->
+    {% if predictions %}
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+            <button class="accordion-button {% if not pre_exam_data %}{% else %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRisk">
+                <i class="bi bi-shield-exclamation me-2"></i>Risk Assessment
+            </button>
+        </h2>
+        <div id="collapseRisk" class="accordion-collapse collapse {% if not pre_exam_data %}show{% endif %}" data-bs-parent="#profileAccordion">
+            <div class="accordion-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead><tr><th>Subject</th><th>Risk</th><th class="d-none d-md-table-cell">Max Possible %</th><th class="d-none d-lg-table-cell">Exam Needed (Score)</th></tr></thead>
+                        <tbody>
+                        {% for p in predictions %}
+                        <tr>
+                            <td class="fw-medium">{{ p.subject.name }}</td>
+                            <td>
+                                <span class="badge badge-{{ p.risk_level|lower }}">{{ p.risk_level }}</span>
+                                {% if p.risk_level == 'High' and p.max_possible_grade is not none %}
+                                <br><small class="text-danger">Cannot pass even with perfect exam</small>
+                                {% endif %}
+                            </td>
+                            <td class="d-none d-md-table-cell">
+                                {% if p.max_possible_grade is not none %}{{ p.max_possible_grade }}%{% else %}—{% endif %}
+                            </td>
+                            <td class="d-none d-lg-table-cell">
+                                {% if p.exam_needed is not none %}
+                                    {% if p.exam_needed > 100 %}
+                                    <span class="text-danger fw-bold">Not achievable</span>
+                                    {% elif p.exam_needed > 85 %}
+                                    <span class="text-warning fw-bold">{{ p.exam_needed_raw }}/{{ p.exam_max_items }}</span>
+                                    <br><small class="text-muted">{{ p.exam_needed }}%</small>
+                                    {% else %}
+                                    <span class="fw-medium">{{ p.exam_needed_raw }}/{{ p.exam_max_items }}</span>
+                                    <br><small class="text-muted">{{ p.exam_needed }}%</small>
+                                    {% endif %}
+                                {% else %}—{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Recommendations -->
+    {% if predictions %}
+    {% set has_recs = [] %}
+    {% for p in predictions %}{% for r in p.recommendations %}{% if has_recs.append(1) %}{% endif %}{% endfor %}{% endfor %}
+    {% if has_recs %}
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRecs">
+                <i class="bi bi-lightbulb me-2 text-warning"></i>Subject-Specific Recommendations
+                <span class="badge bg-warning-subtle text-warning ms-2">{{ has_recs|length }}</span>
+            </button>
+        </h2>
+        <div id="collapseRecs" class="accordion-collapse collapse" data-bs-parent="#profileAccordion">
+            <div class="accordion-body">
+                {% for p in predictions %}
+                {% if p.recommendations %}
+                <h6 class="fw-bold mb-2 d-flex align-items-center gap-2">
+                    <i class="bi bi-book"></i> {{ p.subject.name }}
+                    <span class="badge badge-{{ p.risk_level|lower }}">{{ p.risk_level }}</span>
+                </h6>
+                {% for r in p.recommendations %}
+                <div class="rec-item">
+                    <span class="badge {% if r.strategy_type == 'Counseling' %}bg-danger-subtle text-danger{% elif r.strategy_type == 'Extra Quiz' %}bg-info-subtle text-info{% elif r.strategy_type == 'Tutoring' %}bg-primary-subtle text-primary{% else %}bg-warning-subtle text-warning{% endif %} mb-1">{{ r.strategy_type }}</span>
+                    <div class="small">{{ r.message }}</div>
+                </div>
+                {% endfor %}
+                {% if not loop.last %}<hr class="my-3">{% endif %}
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <!-- Feature Importance & Weak Topics -->
+    {% if fi_data or weak_topics %}
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAnalysis">
+                <i class="bi bi-bar-chart-steps me-2"></i>Performance Analysis
+            </button>
+        </h2>
+        <div id="collapseAnalysis" class="accordion-collapse collapse" data-bs-parent="#profileAccordion">
+            <div class="accordion-body">
+                <div class="row g-3">
+                    {% if fi_data %}
+                    <div class="{% if weak_topics %}col-lg-6{% else %}col-12{% endif %}">
+                        <h6 class="fw-semibold"><i class="bi bi-bar-chart-steps me-1"></i>Feature Importance</h6>
+                        {% for subj_name, fi in fi_data.items() %}
+                        <p class="fw-medium mb-2 small">{{ subj_name }}</p>
+                        {% for feat, imp in fi.items() %}
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="small text-muted" style="width:120px;">{{ feat }}</span>
+                            <div class="fi-bar-bg flex-grow-1"><div class="fi-bar" style="width:{{ (imp*100)|round(1) }}%"></div></div>
+                            <span class="small text-muted" style="width:40px;text-align:right;">{{ (imp*100)|round(1) }}%</span>
+                        </div>
+                        {% endfor %}
+                        {% if not loop.last %}<hr class="my-2">{% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    {% if weak_topics %}
+                    <div class="{% if fi_data %}col-lg-6{% else %}col-12{% endif %}">
+                        <h6 class="fw-semibold"><i class="bi bi-exclamation-triangle me-1 text-warning"></i>Weak Topics (&lt;75%)</h6>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead><tr><th>Topic</th><th>Avg Score</th></tr></thead>
+                                <tbody>
+                                {% for topic_name, avg_pct in weak_topics %}
+                                <tr><td>{{ topic_name }}</td><td><span class="text-danger fw-semibold">{{ avg_pct }}%</span></td></tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Activity Log -->
+    {% if activities %}
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseActivity">
+                <i class="bi bi-activity me-2"></i>Recent Activity
+            </button>
+        </h2>
+        <div id="collapseActivity" class="accordion-collapse collapse" data-bs-parent="#profileAccordion">
+            <div class="accordion-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead><tr><th>Date</th><th>Type</th><th class="d-none d-md-table-cell">Subject</th><th class="d-none d-md-table-cell">Notes</th></tr></thead>
+                        <tbody>
+                        {% for a in activities %}
+                        <tr>
+                            <td class="small">{{ a.date }}</td>
+                            <td><span class="badge bg-light text-dark border">{{ a.activity_type }}</span></td>
+                            <td class="d-none d-md-table-cell">{{ a.subject.name if a.subject else '—' }}</td>
+                            <td class="d-none d-md-table-cell small text-muted">{{ a.notes or '—' }}</td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Grade Trends -->
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseChart">
+                <i class="bi bi-graph-up me-2"></i>Grade Trends
+            </button>
+        </h2>
+        <div id="collapseChart" class="accordion-collapse collapse" data-bs-parent="#profileAccordion">
+            <div class="accordion-body"><canvas id="gradeChart" height="100"></canvas></div>
+        </div>
+    </div>
+
+    <!-- Class Records -->
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRecords">
+                <i class="bi bi-journal-text me-2"></i>Class Records
+            </button>
+        </h2>
+        <div id="collapseRecords" class="accordion-collapse collapse" data-bs-parent="#profileAccordion">
+            <div class="accordion-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Subject</th><th>Term</th>
+                                <th class="d-none d-md-table-cell">Class Standing</th>
+                                <th class="d-none d-md-table-cell">Exam</th>
+                                <th class="d-none d-md-table-cell">Task Perf.</th>
+                                <th class="d-none d-lg-table-cell">Attendance</th>
+                                <th class="d-none d-lg-table-cell">Late</th>
+                                <th class="d-none d-lg-table-cell">Missing</th>
+                                <th>Grade</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for r in records %}
+                        <tr>
+                            <td class="fw-medium">{{ r.subject.name }}</td>
+                            <td>{{ r.term }}</td>
+                            <td class="d-none d-md-table-cell">{{ r.class_standing }}</td>
+                            <td class="d-none d-md-table-cell">{{ r.exam_score }}</td>
+                            <td class="d-none d-md-table-cell">{{ r.task_performance }}</td>
+                            <td class="d-none d-lg-table-cell">{{ r.attendance }}%</td>
+                            <td class="d-none d-lg-table-cell">{{ r.late_submissions }}</td>
+                            <td class="d-none d-lg-table-cell">{{ r.missing_submissions }}</td>
+                            <td>
+                                <span class="fw-bold {% if r.final_grade < 75 %}text-danger{% elif r.final_grade < 80 %}text-warning{% else %}text-success{% endif %}">
+                                    {{ r.final_grade }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const COLORS = ['#4f46e5','#10b981','#ef4444','#f59e0b','#06b6d4','#64748b'];
+fetch('/api/student/{{ student.id }}/grades')
+    .then(r => r.json())
+    .then(data => {
+        const labels = new Set();
+        const datasets = [];
+        let ci = 0;
+        for (const [subj, entries] of Object.entries(data)) {
+            entries.forEach(e => labels.add(e.term));
+            datasets.push({
+                label: subj,
+                data: entries.map(e => e.grade),
+                borderColor: COLORS[ci % COLORS.length],
+                backgroundColor: COLORS[ci % COLORS.length] + '22',
+                fill: true, tension: 0.3,
+            });
+            ci++;
+        }
+        new Chart(document.getElementById('gradeChart'), {
+            type: 'line',
+            data: { labels: [...labels], datasets },
+            options: { responsive: true, scales: { y: { min: 50, max: 100, title: { display: true, text: 'Grade' } } }, plugins: { legend: { position: 'bottom' } } }
+        });
+    });
+</script>
+{% endblock %}

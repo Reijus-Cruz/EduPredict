@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Analytics – EduPredict{% endblock %}
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-graph-up-arrow me-2"></i>Analytics</h4>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header"><i class="bi bi-bar-chart-steps me-2"></i>Risk by Subject</div>
+            <div class="card-body chart-box"><canvas id="subjectRiskChart"></canvas></div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header"><i class="bi bi-people me-2"></i>Average Grade by Section</div>
+            <div class="card-body chart-box"><canvas id="sectionChart"></canvas></div>
+        </div>
+    </div>
+</div>
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header"><i class="bi bi-diagram-3 me-2"></i>Student Behavior Clusters</div>
+            <div class="card-body chart-box"><canvas id="clusterChart"></canvas></div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header"><i class="bi bi-clipboard2-pulse me-2"></i>Intervention Outcomes</div>
+            <div class="card-body chart-box"><canvas id="interventionChart"></canvas></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const RISK_COLORS = { High: '#ef4444', Medium: '#f59e0b', Low: '#10b981' };
+const PALETTE = ['#4f46e5','#06b6d4','#64748b','#10b981'];
+
+fetch('/api/analytics/subject-risks')
+    .then(r => r.json())
+    .then(data => {
+        const subjects = Object.keys(data);
+        const datasets = ['High','Medium','Low'].map(risk => ({
+            label: risk + ' Risk',
+            data: subjects.map(s => data[s][risk] || 0),
+            backgroundColor: RISK_COLORS[risk],
+        }));
+        new Chart(document.getElementById('subjectRiskChart'), {
+            type: 'bar',
+            data: { labels: subjects, datasets },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } } }, plugins: { legend: { position: 'bottom' } } }
+        });
+    });
+
+fetch('/api/analytics/section-comparison')
+    .then(r => r.json())
+    .then(data => {
+        new Chart(document.getElementById('sectionChart'), {
+            type: 'bar',
+            data: { labels: Object.keys(data), datasets: [{ label: 'Avg Grade', data: Object.values(data), backgroundColor: Object.keys(data).map((_, i) => PALETTE[i % PALETTE.length]) }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 60, max: 100 } } }
+        });
+    });
+
+fetch('/api/analytics/cluster-distribution')
+    .then(r => r.json())
+    .then(data => {
+        new Chart(document.getElementById('clusterChart'), {
+            type: 'doughnut',
+            data: { labels: Object.keys(data), datasets: [{ data: Object.values(data), backgroundColor: ['#4f46e5','#ef4444','#10b981','#f59e0b','#64748b'] }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+        });
+    });
+
+const intData = {{ intervention_data | tojson }};
+const intLabels = Object.keys(intData);
+if (intLabels.length) {
+    new Chart(document.getElementById('interventionChart'), {
+        type: 'pie',
+        data: { labels: intLabels.map(l => l.charAt(0).toUpperCase() + l.slice(1).replace('_',' ')), datasets: [{ data: Object.values(intData), backgroundColor: ['#10b981','#f59e0b','#ef4444','#64748b'] }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+    });
+} else {
+    document.getElementById('interventionChart').parentElement.innerHTML =
+        '<p class="text-center text-muted py-4">No intervention outcomes recorded yet.</p>';
+}
+</script>
+{% endblock %}

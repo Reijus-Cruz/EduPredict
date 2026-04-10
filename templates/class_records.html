@@ -1,0 +1,452 @@
+{% extends "base.html" %}
+{% block title %}Class Records – EduPredict{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-journal-text me-2"></i>Class Records</h4>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{{ url_for('export_class_records') }}" class="btn btn-success btn-sm"><i class="bi bi-file-earmark-excel me-1"></i>Export Excel</a>
+        <button class="btn btn-outline-secondary btn-sm" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+    </div>
+</div>
+
+{% if current_user.is_staff %}
+<!-- Main Tabs: Records / Add Record / Import Excel -->
+<ul class="nav nav-tabs mb-3" id="recordTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="records-tab" data-bs-toggle="tab" data-bs-target="#tab-records" type="button" role="tab">
+            <i class="bi bi-table me-1"></i>Records
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="add-tab" data-bs-toggle="tab" data-bs-target="#tab-add" type="button" role="tab">
+            <i class="bi bi-plus-circle me-1"></i>Add Record
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="exam-tab" data-bs-toggle="tab" data-bs-target="#tab-exam" type="button" role="tab">
+            <i class="bi bi-pencil-square me-1"></i>Enter Exam Scores
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="import-tab" data-bs-toggle="tab" data-bs-target="#tab-import" type="button" role="tab">
+            <i class="bi bi-cloud-arrow-up me-1"></i>Import Excel
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="recordTabContent">
+    <!-- Tab 1: Records with Subject Pills -->
+    <div class="tab-pane fade show active" id="tab-records" role="tabpanel">
+{% endif %}
+
+        <!-- Term Filter -->
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <span class="fw-semibold text-muted small">Term:</span>
+            <div class="btn-group btn-group-sm" id="termFilter" role="group">
+                <button type="button" class="btn btn-outline-primary active" data-term="Prelim">Prelim</button>
+                <button type="button" class="btn btn-outline-primary" data-term="Midterm">Midterm</button>
+                <button type="button" class="btn btn-outline-primary" data-term="Finals">Finals</button>
+            </div>
+            <div class="ms-auto" style="max-width:280px;width:100%">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" id="recordSearch" placeholder="Search student...">
+                </div>
+            </div>
+        </div>
+
+        <!-- Subject Pills -->
+        {% if subjects %}
+        <ul class="nav nav-pills mb-3" id="subjectPills" role="tablist">
+            {% for subject in subjects %}
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if loop.first %}active{% endif %}"
+                        data-bs-toggle="pill"
+                        data-bs-target="#subj-{{ subject.id }}"
+                        type="button" role="tab">
+                    {{ subject.name }}
+                    <span class="badge bg-secondary ms-1">{{ records_by_subject.get(subject.name, [])|length }}</span>
+                </button>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        <div class="tab-content" id="subjectTabContent">
+            {% for subject in subjects %}
+            {% set subj_records = records_by_subject.get(subject.name, []) %}
+            <div class="tab-pane fade {% if loop.first %}show active{% endif %}"
+                 id="subj-{{ subject.id }}" role="tabpanel">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-table me-2"></i>{{ subject.name }}</span>
+                        <span class="badge bg-secondary">{{ subj_records|length }} records</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Student</th>
+                                        <th class="d-none d-md-table-cell">Class Standing (20%)</th>
+                                        <th class="d-none d-md-table-cell exam-header">Prelim Exam (50%)</th>
+                                        <th class="d-none d-md-table-cell">Task Performance (30%)</th>
+                                        <th class="d-none d-lg-table-cell">Attendance</th>
+                                        <th>Grade</th>
+                                        {% if current_user.is_staff %}<th></th>{% endif %}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                {% for rec, student, subj in subj_records %}
+                                <tr data-term="{{ rec.term }}">
+                                    <td class="row-num"></td>
+                                    <td class="fw-medium">{{ student.name }}</td>
+                                    <td class="d-none d-md-table-cell">{{ rec.class_standing }}</td>
+                                    <td class="d-none d-md-table-cell">{{ rec.exam_score }}</td>
+                                    <td class="d-none d-md-table-cell">{{ rec.task_performance }}</td>
+                                    <td class="d-none d-lg-table-cell">{{ rec.attendance }}%</td>
+                                    <td>
+                                        <span class="fw-bold {% if rec.final_grade < 75 %}text-danger{% elif rec.final_grade < 80 %}text-warning{% else %}text-success{% endif %}">
+                                            {{ rec.final_grade }}
+                                        </span>
+                                    </td>
+                                    {% if current_user.is_staff %}
+                                    <td class="text-end">
+                                        <button class="btn btn-sm btn-outline-secondary"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#editModal{{ rec.id }}" title="Edit">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                    </td>
+                                    {% endif %}
+                                </tr>
+                                {% endfor %}
+                                {% if not subj_records %}
+                                <tr><td colspan="8" class="text-center text-muted py-4">No records for this subject.</td></tr>
+                                {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+{% if current_user.is_staff %}
+    </div>
+
+    <!-- Tab 2: Add Record -->
+    <div class="tab-pane fade" id="tab-add" role="tabpanel">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-plus-circle me-2"></i>Add New Record</div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('class_records') }}">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label for="student_id" class="form-label">Student</label>
+                            <select class="form-select" name="student_id" id="student_id" required>
+                                <option value="">-- Select Student --</option>
+                                {% for s in students %}
+                                <option value="{{ s.id }}">{{ s.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="subject_id" class="form-label">Subject</label>
+                            <select class="form-select" name="subject_id" id="subject_id" required>
+                                <option value="">-- Select Subject --</option>
+                                {% for sub in subjects %}
+                                <option value="{{ sub.id }}">{{ sub.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="term" class="form-label">Term</label>
+                            <select class="form-select" name="term" id="term" required>
+                                <option value="Prelim">Prelim</option>
+                                <option value="Midterm">Midterm</option>
+                                <option value="Finals">Finals</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-6 col-md-3">
+                            <label for="class_standing" class="form-label">Class Standing (20%)</label>
+                            <input class="form-control" type="number" step="0.01" min="0" max="100" name="class_standing" id="class_standing" required>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label for="exam_score" class="form-label">Exam Score (50%)</label>
+                            <input class="form-control" type="number" step="0.01" min="0" max="100" name="exam_score" id="exam_score" required>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label for="task_performance" class="form-label">Task Performance (30%)</label>
+                            <input class="form-control" type="number" step="0.01" min="0" max="100" name="task_performance" id="task_performance" required>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label for="attendance" class="form-label">Attendance (%)</label>
+                            <input class="form-control" type="number" step="0.01" min="0" max="100" name="attendance" id="attendance" value="100" required>
+                        </div>
+                    </div>
+                    <p class="text-muted small mb-3"><i class="bi bi-info-circle me-1"></i>Grade = Class Standing(20%) + Task Performance(30%) + Exam(50%). Auto-calculated on save.</p>
+                    <button class="btn btn-success" type="submit"><i class="bi bi-save me-1"></i>Save Record</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab 3: Enter Exam Scores -->
+    <div class="tab-pane fade" id="tab-exam" role="tabpanel">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-pencil-square me-2"></i>Enter Major Exam Scores</div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('bulk_exam_scores') }}">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label for="exam_subject_id" class="form-label">Subject</label>
+                            <select class="form-select" name="subject_id" id="exam_subject_id" required>
+                                {% for sub in subjects %}
+                                <option value="{{ sub.id }}">{{ sub.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="exam_term" class="form-label">Term</label>
+                            <select class="form-select" name="term" id="exam_term" required>
+                                <option value="Prelim">Prelim Exam</option>
+                                <option value="Midterm">Midterm Exam</option>
+                                <option value="Finals">Finals Exam</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="button" class="btn btn-outline-primary w-100" id="loadStudentsBtn">
+                                <i class="bi bi-arrow-repeat me-1"></i>Load Students
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="examScoresTable" class="d-none">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Student</th>
+                                        <th class="d-none d-md-table-cell">Class Standing (20%)</th>
+                                        <th class="d-none d-md-table-cell">Task Performance (30%)</th>
+                                        <th class="d-none d-md-table-cell">Current Exam</th>
+                                        <th style="min-width:120px">New Exam Score</th>
+                                        <th class="d-none d-md-table-cell">New Grade</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="examScoresBody"></tbody>
+                            </table>
+                        </div>
+                        <div class="mt-3 d-flex justify-content-between align-items-center">
+                            <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Grade = Class Standing(20%) + Task Performance(30%) + Exam(50%). Leave blank to keep current score.</p>
+                            <button type="submit" class="btn btn-success"><i class="bi bi-save me-1"></i>Save All Exam Scores</button>
+                        </div>
+                    </div>
+                    <div id="examNoRecords" class="d-none">
+                        <div class="text-center text-muted py-4">No records found for the selected subject and term.</div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab 4: Import Excel -->
+    <div class="tab-pane fade" id="tab-import" role="tabpanel">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-cloud-arrow-up me-2"></i>Import from Excel</span>
+                <a href="{{ url_for('download_template') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-download me-1"></i>Download Template</a>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('upload_class_records') }}" enctype="multipart/form-data">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-8">
+                            <label for="excel_file" class="form-label">Select Excel File (.xlsx)</label>
+                            <input class="form-control" type="file" name="excel_file" id="excel_file" accept=".xlsx,.xls" required>
+                            <div class="form-text">Supports class record format or flat format with columns: Student Name, Subject, Term, Class Standing, Exam Score, Task Performance, Attendance</div>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-primary w-100" type="submit"><i class="bi bi-upload me-1"></i>Upload & Import</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Edit Grade Modals -->
+{% if current_user.is_staff %}
+{% for subj_name, recs in records_by_subject.items() %}
+{% for rec, student, subject in recs %}
+<div class="modal fade" id="editModal{{ rec.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Edit Grade – {{ student.name }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('edit_class_record', record_id=rec.id) }}">
+                <div class="modal-body">
+                    <p class="text-muted small mb-3">{{ subject.name }} – {{ rec.term }}</p>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label">Class Standing (20%)</label>
+                            <input class="form-control" type="number" step="0.01" min="0" max="100" name="class_standing" value="{{ rec.class_standing }}" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">{{ rec.term }} Exam (50%)</label>
+                            <input class="form-control" type="number" step="0.01" min="0" max="100" name="exam_score" value="{{ rec.exam_score }}" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Task Performance (30%)</label>
+                            <input class="form-control" type="number" step="0.01" min="0" max="100" name="task_performance" value="{{ rec.task_performance }}" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Attendance (%)</label>
+                            <input class="form-control" type="number" step="0.01" min="0" max="100" name="attendance" value="{{ rec.attendance }}" required>
+                        </div>
+                    </div>
+                    <p class="text-muted small mt-2 mb-0"><i class="bi bi-info-circle me-1"></i>Grade auto-calculated: Class Standing(20%) + Task Performance(30%) + {{ rec.term }} Exam(50%)</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endfor %}
+{% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const termBtns = document.querySelectorAll('#termFilter [data-term]');
+    function getActiveTerm() {
+        const active = document.querySelector('#termFilter .active');
+        return active ? active.dataset.term : 'Prelim';
+    }
+    function applyFilters() {
+        const term = getActiveTerm();
+        const q = document.getElementById('recordSearch').value.toLowerCase();
+        // Update exam column headers to match selected term
+        document.querySelectorAll('.exam-header').forEach(th => {
+            th.textContent = term + ' Exam (50%)';
+        });
+        document.querySelectorAll('#subjectTabContent tbody tr[data-term]').forEach(row => {
+            const termMatch = row.dataset.term === term;
+            const name = row.cells[1] ? row.cells[1].textContent.toLowerCase() : '';
+            const nameMatch = !q || name.includes(q);
+            row.style.display = (termMatch && nameMatch) ? '' : 'none';
+        });
+        // Update row numbers
+        document.querySelectorAll('#subjectTabContent table').forEach(table => {
+            let n = 0;
+            table.querySelectorAll('tbody tr[data-term]').forEach(row => {
+                if (row.style.display !== 'none') {
+                    n++;
+                    row.querySelector('.row-num').textContent = n;
+                }
+            });
+        });
+        // Update subject pill badges
+        const term2 = term;
+        document.querySelectorAll('#subjectPills .nav-link').forEach(pill => {
+            const target = pill.getAttribute('data-bs-target');
+            const pane = document.querySelector(target);
+            if (pane) {
+                let visible = 0;
+                pane.querySelectorAll('tbody tr[data-term="' + term2 + '"]').forEach(row => {
+                    const name = row.cells[1] ? row.cells[1].textContent.toLowerCase() : '';
+                    if (!q || name.includes(q)) visible++;
+                });
+                const badge = pill.querySelector('.badge');
+                if (badge) badge.textContent = visible;
+            }
+        });
+    }
+    termBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            termBtns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            applyFilters();
+        });
+    });
+    document.getElementById('recordSearch').addEventListener('input', applyFilters);
+    // Initialize with Prelim
+    applyFilters();
+
+    // ----- Enter Exam Scores tab -----
+    const loadBtn = document.getElementById('loadStudentsBtn');
+    if (loadBtn) {
+        loadBtn.addEventListener('click', function() {
+            const subjectId = document.getElementById('exam_subject_id').value;
+            const term = document.getElementById('exam_term').value;
+            fetch(`/api/class-records?subject_id=${subjectId}&term=${term}`)
+                .then(r => r.json())
+                .then(data => {
+                    const tbody = document.getElementById('examScoresBody');
+                    const table = document.getElementById('examScoresTable');
+                    const noRec = document.getElementById('examNoRecords');
+                    tbody.innerHTML = '';
+                    if (!data.records || data.records.length === 0) {
+                        table.classList.add('d-none');
+                        noRec.classList.remove('d-none');
+                        return;
+                    }
+                    noRec.classList.add('d-none');
+                    table.classList.remove('d-none');
+                    data.records.forEach((rec, i) => {
+                        const newGrade = (rec.class_standing * 0.20 + rec.task_performance * 0.30 + rec.exam_score * 0.50).toFixed(2);
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${i+1}</td>
+                            <td class="fw-medium">${rec.student_name}</td>
+                            <td class="d-none d-md-table-cell">${rec.class_standing}</td>
+                            <td class="d-none d-md-table-cell">${rec.task_performance}</td>
+                            <td class="d-none d-md-table-cell">${rec.exam_score}</td>
+                            <td>
+                                <input type="hidden" name="record_ids" value="${rec.id}">
+                                <input type="number" class="form-control form-control-sm exam-input"
+                                       name="exam_scores" step="0.01" min="0" max="100"
+                                       placeholder="${rec.exam_score}"
+                                       data-cs="${rec.class_standing}" data-tp="${rec.task_performance}">
+                            </td>
+                            <td class="d-none d-md-table-cell new-grade">${newGrade}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                    // Live grade preview
+                    tbody.querySelectorAll('.exam-input').forEach(input => {
+                        input.addEventListener('input', function() {
+                            const cs = parseFloat(this.dataset.cs) || 0;
+                            const tp = parseFloat(this.dataset.tp) || 0;
+                            const exam = parseFloat(this.value) || parseFloat(this.placeholder) || 0;
+                            const grade = (cs * 0.20 + tp * 0.30 + exam * 0.50).toFixed(2);
+                            const gradeCell = this.closest('tr').querySelector('.new-grade');
+                            gradeCell.textContent = grade;
+                            if (parseFloat(grade) < 75) {
+                                gradeCell.className = 'd-none d-md-table-cell new-grade fw-bold text-danger';
+                            } else if (parseFloat(grade) < 80) {
+                                gradeCell.className = 'd-none d-md-table-cell new-grade fw-bold text-warning';
+                            } else {
+                                gradeCell.className = 'd-none d-md-table-cell new-grade fw-bold text-success';
+                            }
+                        });
+                    });
+                });
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}What-If Simulator – EduPredict{% endblock %}
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-magic me-2"></i>What-If Simulator</h4>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header"><i class="bi bi-sliders me-2"></i>Adjust Student Metrics</div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">Drag the sliders to simulate different scenarios and see how they affect predicted outcomes.</p>
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <label class="form-label">Class Standing (20%): <strong id="val_cs">75</strong></label>
+                <input type="range" class="form-range" id="class_standing" min="0" max="100" value="75" oninput="document.getElementById('val_cs').textContent=this.value">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Exam Score (50%): <strong id="val_exam">75</strong></label>
+                <input type="range" class="form-range" id="exam_score" min="0" max="100" value="75" oninput="document.getElementById('val_exam').textContent=this.value">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Task Performance (30%): <strong id="val_tp">75</strong></label>
+                <input type="range" class="form-range" id="task_performance" min="0" max="100" value="75" oninput="document.getElementById('val_tp').textContent=this.value">
+            </div>
+        </div>
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <label class="form-label">Attendance (%): <strong id="val_att">90</strong></label>
+                <input type="range" class="form-range" id="attendance" min="0" max="100" value="90" oninput="document.getElementById('val_att').textContent=this.value">
+            </div>
+        </div>
+        <button class="btn btn-primary" onclick="simulate()"><i class="bi bi-play-circle me-1"></i>Simulate</button>
+    </div>
+</div>
+
+<!-- Results -->
+<div id="results" style="display:none;">
+    <div class="row g-3 mb-4">
+        <div class="col-6">
+            <div class="card stat-card h-100" id="card_risk"><div class="card-body">
+                <div class="text-muted small text-uppercase fw-semibold">Predicted Risk</div>
+                <div class="fs-4 fw-bold mt-1" id="res_risk">-</div>
+            </div></div>
+        </div>
+        <div class="col-6">
+            <div class="card stat-card h-100"><div class="card-body">
+                <div class="text-muted small text-uppercase fw-semibold">Predicted Grade</div>
+                <div class="fs-4 fw-bold mt-1" id="res_grade">-</div>
+            </div></div>
+        </div>
+
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header"><i class="bi bi-bar-chart-steps me-2"></i>Feature Importance</div>
+                <div class="card-body chart-box"><canvas id="fiChart"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header"><i class="bi bi-lightbulb me-2"></i>Tips to Improve</div>
+                <div class="card-body">
+                    <ul id="tipsList" class="list-unstyled mb-0"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let fiChartInstance = null;
+
+function simulate() {
+    const body = {
+        class_standing: +document.getElementById('class_standing').value,
+        exam_score: +document.getElementById('exam_score').value,
+        task_performance: +document.getElementById('task_performance').value,
+        attendance: +document.getElementById('attendance').value,
+    };
+    fetch('/api/what-if', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    })
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('results').style.display = 'block';
+        document.getElementById('res_risk').textContent = data.risk_level;
+        document.getElementById('res_grade').textContent = data.predicted_grade;
+        // confidence removed
+
+        const riskCard = document.getElementById('card_risk');
+        riskCard.className = 'card stat-card h-100';
+        if (data.risk_level === 'High') riskCard.style.borderLeft = '4px solid var(--ep-danger)';
+        else if (data.risk_level === 'Medium') riskCard.style.borderLeft = '4px solid var(--ep-warning)';
+        else riskCard.style.borderLeft = '4px solid var(--ep-success)';
+
+        const tipsList = document.getElementById('tipsList');
+        tipsList.innerHTML = '';
+        (data.tips || []).forEach(t => {
+            const li = document.createElement('li');
+            li.className = 'rec-item';
+            li.textContent = t;
+            tipsList.appendChild(li);
+        });
+        if (!data.tips || !data.tips.length) {
+            tipsList.innerHTML = '<li class="rec-item" style="border-left-color:var(--ep-success);">All metrics look good! Keep it up.</li>';
+        }
+
+        const fi = data.feature_importance || {};
+        const labels = Object.keys(fi);
+        const values = Object.values(fi);
+        if (fiChartInstance) fiChartInstance.destroy();
+        if (labels.length) {
+            fiChartInstance = new Chart(document.getElementById('fiChart'), {
+                type: 'bar',
+                data: { labels, datasets: [{ label: 'Importance', data: values.map(v => +(v*100).toFixed(1)), backgroundColor: '#4f46e5' }] },
+                options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, title: { display: true, text: '% Importance' } } } }
+            });
+        }
+    });
+}
+</script>
+{% endblock %}

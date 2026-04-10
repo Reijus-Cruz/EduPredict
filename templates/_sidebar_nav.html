@@ -1,0 +1,86 @@
+<!-- Sidebar navigation links – shared between desktop sidebar and mobile offcanvas -->
+<ul class="nav flex-column sidebar-nav py-2">
+    {% if current_user.is_staff %}
+    <li class="nav-item">
+        <a href="{{ url_for('dashboard') }}" class="nav-link {{ 'active' if request.endpoint == 'dashboard' }}">
+            <i class="bi bi-speedometer2"></i> Dashboard
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('students') }}" class="nav-link {{ 'active' if request.endpoint in ('students','student_profile') }}">
+            <i class="bi bi-people"></i> Students
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('class_records') }}" class="nav-link {{ 'active' if request.endpoint == 'class_records' }}">
+            <i class="bi bi-journal-text"></i> Class Records
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('reports') }}" class="nav-link {{ 'active' if request.endpoint == 'reports' }}">
+            <i class="bi bi-file-earmark-bar-graph"></i> Reports
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('analytics') }}" class="nav-link {{ 'active' if request.endpoint == 'analytics' }}">
+            <i class="bi bi-graph-up"></i> Analytics
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('interventions') }}" class="nav-link {{ 'active' if request.endpoint == 'interventions' }}">
+            <i class="bi bi-heart-pulse"></i> Interventions
+        </a>
+    </li>
+    {% elif current_user.is_parent %}
+    <li class="nav-item">
+        <a href="{{ url_for('student_profile', student_id=current_user.student_id) }}" class="nav-link {{ 'active' if request.endpoint == 'student_profile' }}">
+            <i class="bi bi-person-badge"></i> My Child's Profile
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('class_records') }}" class="nav-link {{ 'active' if request.endpoint == 'class_records' }}">
+            <i class="bi bi-journal-text"></i> Grades
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('parent_contact') }}" class="nav-link {{ 'active' if request.endpoint == 'parent_contact' }}">
+            <i class="bi bi-telephone"></i> Contact Info
+        </a>
+    </li>
+    {% else %}
+    <li class="nav-item">
+        <a href="{{ url_for('student_profile', student_id=current_user.student_id) }}" class="nav-link {{ 'active' if request.endpoint == 'student_profile' }}">
+            <i class="bi bi-person-badge"></i> My Profile
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('class_records') }}" class="nav-link {{ 'active' if request.endpoint == 'class_records' }}">
+            <i class="bi bi-journal-text"></i> My Grades
+        </a>
+    </li>
+    {% endif %}
+    {% if not current_user.is_parent %}
+    <li class="nav-item">
+        <a href="{{ url_for('what_if') }}" class="nav-link {{ 'active' if request.endpoint == 'what_if' }}">
+            <i class="bi bi-sliders"></i> What-If
+        </a>
+    </li>
+    {% endif %}
+    <li class="nav-item">
+        <a href="{{ url_for('notifications') }}" class="nav-link {{ 'active' if request.endpoint == 'notifications' }}">
+            <i class="bi bi-bell"></i> Notifications
+            <span class="badge bg-danger ms-1 notif-badge" id="notifBadge" style="display:none;"></span>
+        </a>
+    </li>
+</ul>
+
+<!-- Mobile-only user info -->
+<div class="d-lg-none px-3 py-3 border-top border-white border-opacity-10 small mt-auto">
+    <div class="text-white-50">
+        Logged in as <strong class="text-white">{{ current_user.username }}</strong>
+        <span class="badge bg-primary bg-opacity-50 ms-1">{{ current_user.role }}</span>
+    </div>
+    <a href="{{ url_for('logout') }}" class="text-white-50 text-decoration-none d-inline-flex align-items-center gap-1 mt-1">
+        <i class="bi bi-box-arrow-left"></i> Logout
+    </a>
+</div>
