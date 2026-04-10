@@ -13,7 +13,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'edupredict-dev-secret-key-2026'
+app.config['SECRET_KEY'] = 'educlassrecord-dev-secret-key-2026'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'students.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -271,11 +271,11 @@ def _create_risk_notifications(student_id):
         record = ClassRecord.query.filter_by(student_id=student_id).order_by(ClassRecord.id.desc()).first()
         if record:
             pre = calculate_pre_exam_prediction(record.class_standing, record.task_performance)
-            sms_msg = (f'EduPredict Alert: {student.name} is HIGH RISK – max possible grade is '
+            sms_msg = (f'EduClassRecord Alert: {student.name} is HIGH RISK – max possible grade is '
                        f'{pre["max_possible_grade"]:.1f}% even with a perfect exam. '
                        f'Consultation with instructor is needed. Please login to view details.')
         else:
-            sms_msg = (f'EduPredict Alert: {student.name} is HIGH RISK of failing in '
+            sms_msg = (f'EduClassRecord Alert: {student.name} is HIGH RISK of failing in '
                        f'{", ".join(high_subjects)}. Please login to view details.')
         _send_sms(student.parent_phone, sms_msg)
         latest_notif = Notification.query.filter_by(

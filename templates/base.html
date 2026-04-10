@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}EduPredict{% endblock %}</title>
+    <title>{% block title %}EduClassRecord{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -18,7 +18,7 @@
 <div class="offcanvas offcanvas-start sidebar-offcanvas" tabindex="-1" id="sidebarMobile">
     <div class="offcanvas-header border-bottom border-opacity-10">
         <h5 class="offcanvas-title text-white d-flex align-items-center gap-2">
-            <i class="bi bi-mortarboard-fill"></i> EduPredict
+            <i class="bi bi-mortarboard-fill"></i> EduClassRecord
         </h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
     </div>
@@ -32,7 +32,7 @@
     <nav class="sidebar d-none d-lg-flex flex-column flex-shrink-0">
         <div class="sidebar-brand d-flex align-items-center gap-2 px-3 py-3 border-bottom border-white border-opacity-10">
             <i class="bi bi-mortarboard-fill fs-4"></i>
-            <span class="fw-bold fs-5">EduPredict</span>
+            <span class="fw-bold fs-5">EduClassRecord</span>
         </div>
         {% include '_sidebar_nav.html' %}
         <div class="mt-auto px-3 py-3 border-top border-white border-opacity-10 small">
@@ -54,7 +54,7 @@
                 <i class="bi bi-list fs-4"></i>
             </button>
             <span class="navbar-brand mb-0 fw-bold text-primary">
-                <i class="bi bi-mortarboard-fill"></i> EduPredict
+                <i class="bi bi-mortarboard-fill"></i> EduClassRecord
             </span>
             <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary border-0 btn-sm">
                 <i class="bi bi-box-arrow-left"></i>
