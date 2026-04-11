@@ -52,6 +52,8 @@ class Student(db.Model):
     name = db.Column(db.String(100), nullable=False)
     section = db.Column(db.String(20))
     year_level = db.Column(db.Integer)
+    semester = db.Column(db.String(30))
+    school_year = db.Column(db.String(30))
     email = db.Column(db.String(100))
     is_scholar = db.Column(db.Boolean, default=False)
     is_working_student = db.Column(db.Boolean, default=False)
@@ -97,6 +99,8 @@ class ClassRecord(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
     term = db.Column(db.String(20))
+    semester = db.Column(db.String(30))
+    school_year = db.Column(db.String(30))
     class_standing = db.Column(db.Float, default=0)     # Equiv % (weight 20%)
     exam_score = db.Column(db.Float, default=0)          # Equiv % (weight 50%)
     task_performance = db.Column(db.Float, default=0)    # Equiv % (weight 30%)
@@ -113,6 +117,39 @@ class StudentActivity(db.Model):
     date = db.Column(db.String(10))
     notes = db.Column(db.Text)
     subject = db.relationship('Subject')
+
+
+class AttendanceRecord(db.Model):
+    __tablename__ = 'attendance_records'
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    term = db.Column(db.String(20), default='Prelim')  # Prelim / Midterm / Finals
+    meeting_number = db.Column(db.Integer, nullable=False)  # 1-5
+    date = db.Column(db.Date, nullable=True)
+    status = db.Column(db.String(10), nullable=False, default='Present')  # Present / Absent
+    room = db.Column(db.String(50))
+    student = db.relationship('Student', backref='attendance_records')
+
+
+def _calc_attendance_grade(present_count):
+    """Attendance grade: base 50 + 10 per present (max 5 meetings = 100)."""
+    return min(100, 50 + present_count * 10)
+
+
+def _get_attendance_grade(student_id, term='Prelim'):
+    """Get attendance grade for a student in a given term."""
+    records = AttendanceRecord.query.filter_by(student_id=student_id, term=term).all()
+    present = sum(1 for r in records if r.status == 'Present')
+    return _calc_attendance_grade(present)
+
+
+def _attendance_risk_level(att_grade):
+    """Risk level from attendance grade: 50-60=High, 70-80=Medium, 90-100=Low."""
+    if att_grade <= 60:
+        return 'High'
+    elif att_grade <= 80:
+        return 'Medium'
+    return 'Low'
 
 
 class Prediction(db.Model):
@@ -155,6 +192,20 @@ class Prediction(db.Model):
             data = json.loads(self.feature_importance)
             return data.get('exam_max_items', 50)
         return 50
+
+    @property
+    def high_risk_flags(self):
+        if self.feature_importance:
+            data = json.loads(self.feature_importance)
+            return data.get('high_risk_flags', [])
+        return []
+
+    @property
+    def medium_risk_flags(self):
+        if self.feature_importance:
+            data = json.loads(self.feature_importance)
+            return data.get('medium_risk_flags', [])
+        return []
 
 
 class Recommendation(db.Model):
@@ -200,6 +251,52 @@ def _auto_predict_student(student_id):
     from ml_engine import predict_for_student
     predict_for_student(db.session, student_id)
     _create_risk_notifications(student_id)
+    _check_attendance_notifications(student_id)
+
+
+def _check_attendance_notifications(student_id):
+    """Auto-notify student and parent when attendance grade indicates risk (5-meeting system)."""
+    student = db.session.get(Student, student_id)
+    if not student:
+        return
+    att_grade = _get_attendance_grade(student_id, 'Prelim')
+    att_risk = _attendance_risk_level(att_grade)
+    if att_risk == 'Low':
+        return
+
+    records = AttendanceRecord.query.filter_by(student_id=student_id, term='Prelim').all()
+    present = sum(1 for r in records if r.status == 'Present')
+    absent = len(records) - present
+
+    title = f'Attendance Alert: {student.name}'
+    message = (
+        f'{student.name} has {present} present out of {len(records)} meetings (Prelim). '
+        f'Attendance Grade: {att_grade}. Risk Level: {att_risk}. '
+    )
+    if att_risk == 'High':
+        message += 'Immediate consultation with the instructor is needed.'
+    else:
+        message += 'Please coordinate with the instructor to improve attendance.'
+
+    student_user = User.query.filter_by(student_id=student_id, role='student').first()
+    parent_user = User.query.filter_by(student_id=student_id, role='parent').first()
+
+    for user in [student_user, parent_user]:
+        if not user:
+            continue
+        existing = Notification.query.filter_by(
+            user_id=user.id, student_id=student_id, title=title, is_read=False
+        ).first()
+        if existing:
+            continue
+        notif = Notification(
+            user_id=user.id, student_id=student_id,
+            title=title, message=message,
+            type='danger' if att_risk == 'High' else 'warning',
+        )
+        db.session.add(notif)
+
+    db.session.commit()
 
 
 def _create_risk_notifications(student_id):
@@ -350,9 +447,23 @@ def dashboard():
     low_risk = Prediction.query.filter_by(risk_level='Low').count()
     pending_interventions = InterventionLog.query.filter_by(status='pending').count()
 
-    recent_predictions = (
+    # Top 3 high-risk students
+    high_risk_students = (
         db.session.query(Prediction, Student)
-        .join(Student).order_by(Prediction.id.desc()).limit(10).all()
+        .join(Student).filter(Prediction.risk_level == 'High')
+        .order_by(Prediction.id.desc()).limit(3).all()
+    )
+    # Top 3 medium-risk students
+    medium_risk_students = (
+        db.session.query(Prediction, Student)
+        .join(Student).filter(Prediction.risk_level == 'Medium')
+        .order_by(Prediction.id.desc()).limit(3).all()
+    )
+    # Top 3 students with highest grades
+    top_performers = (
+        db.session.query(ClassRecord, Student)
+        .join(Student, ClassRecord.student_id == Student.id)
+        .order_by(ClassRecord.final_grade.desc()).limit(3).all()
     )
 
     return render_template('dashboard.html',
@@ -361,21 +472,39 @@ def dashboard():
                            medium_risk=medium_risk,
                            low_risk=low_risk,
                            pending_interventions=pending_interventions,
-                           recent_predictions=recent_predictions)
+                           high_risk_students=high_risk_students,
+                           medium_risk_students=medium_risk_students,
+                           top_performers=top_performers)
 
 
 @app.route('/students')
 @staff_required
 def students():
     page = request.args.get('page', 1, type=int)
-    per_page = 15
-    pagination = Student.query.order_by(Student.name).paginate(page=page, per_page=per_page, error_out=False)
+    per_page = 10
+    section_filter = request.args.get('section', '')
+    semester_filter = request.args.get('semester', '')
+    sy_filter = request.args.get('school_year', '')
+    query = Student.query
+    if section_filter:
+        query = query.filter_by(section=section_filter)
+    if semester_filter:
+        query = query.filter_by(semester=semester_filter)
+    if sy_filter:
+        query = query.filter_by(school_year=sy_filter)
+    pagination = query.order_by(Student.name).paginate(page=page, per_page=per_page, error_out=False)
     all_students = pagination.items
     predictions_map = {}
     for s in all_students:
         pred = Prediction.query.filter_by(student_id=s.id).order_by(Prediction.id.desc()).first()
         predictions_map[s.id] = pred
-    return render_template('students.html', students=all_students, predictions=predictions_map, pagination=pagination)
+    sections = [r[0] for r in db.session.query(Student.section).distinct().order_by(Student.section).all() if r[0]]
+    semesters = [r[0] for r in db.session.query(Student.semester).distinct().all() if r[0]]
+    school_years = [r[0] for r in db.session.query(Student.school_year).distinct().all() if r[0]]
+    return render_template('students.html', students=all_students, predictions=predictions_map,
+                           pagination=pagination, sections=sections, semesters=semesters,
+                           school_years=school_years, current_section=section_filter,
+                           current_semester=semester_filter, current_sy=sy_filter)
 
 
 @app.route('/students/add', methods=['POST'])
@@ -385,6 +514,8 @@ def add_student():
         name = request.form.get('name', '').strip()
         section = request.form.get('section', '').strip()
         year_level = int(request.form.get('year_level', 1))
+        semester = request.form.get('semester', '').strip()
+        school_year = request.form.get('school_year', '').strip()
         email = request.form.get('email', '').strip()
         is_scholar = request.form.get('is_scholar') == 'on'
         is_working = request.form.get('is_working_student') == 'on'
@@ -395,6 +526,7 @@ def add_student():
             return redirect(url_for('students'))
         student = Student(
             name=name, section=section, year_level=year_level,
+            semester=semester, school_year=school_year,
             email=email, is_scholar=is_scholar, is_working_student=is_working,
             parent_name=parent_name, parent_phone=parent_phone,
         )
@@ -436,6 +568,7 @@ def delete_student(student_id):
     QuizScore.query.filter_by(student_id=student_id).delete()
     ClassRecord.query.filter_by(student_id=student_id).delete()
     StudentActivity.query.filter_by(student_id=student_id).delete()
+    AttendanceRecord.query.filter_by(student_id=student_id).delete()
     Notification.query.filter_by(student_id=student_id).delete()
     User.query.filter_by(student_id=student_id).delete()
     db.session.delete(student)
@@ -490,11 +623,20 @@ def student_profile(student_id):
         pred_info['attendance'] = r.attendance
         pre_exam_data.append(pred_info)
 
+    # Attendance present count for parent view (5-meeting system)
+    att_present = 0
+    att_total = 0
+    att_records = AttendanceRecord.query.filter_by(student_id=student_id, term='Prelim').all()
+    if att_records:
+        att_present = sum(1 for r in att_records if r.status == 'Present')
+        att_total = len(att_records)
+
     return render_template('student_profile.html',
                            student=student, records=records,
                            predictions=predictions, activities=activities,
                            weak_topics=weak_topics, fi_data=fi_data,
-                           pre_exam_data=pre_exam_data)
+                           pre_exam_data=pre_exam_data,
+                           att_present=att_present, att_total=att_total)
 
 
 @app.route('/class-records', methods=['GET', 'POST'])
@@ -513,6 +655,8 @@ def class_records():
                 student_id=student_id,
                 subject_id=int(request.form['subject_id']),
                 term=request.form['term'],
+                semester=request.form.get('semester', ''),
+                school_year=request.form.get('school_year', ''),
                 class_standing=cs,
                 exam_score=exam,
                 task_performance=tp,
@@ -545,9 +689,11 @@ def class_records():
 
     all_students = Student.query.order_by(Student.name).all()
     all_subjects = Subject.query.order_by(Subject.name).all()
+    sections = [r[0] for r in db.session.query(Student.section).distinct().order_by(Student.section).all() if r[0]]
     return render_template('class_records.html',
                            records_by_subject=records_by_subject,
-                           students=all_students, subjects=all_subjects)
+                           students=all_students, subjects=all_subjects,
+                           sections=sections)
 
 
 @app.route('/class-records/<int:record_id>/edit', methods=['POST'])
@@ -577,14 +723,17 @@ def api_class_records():
     """Return JSON list of class records for a given subject and term."""
     subject_id = request.args.get('subject_id', type=int)
     term = request.args.get('term', '')
+    section = request.args.get('section', '')
     if not subject_id or not term:
         return jsonify({'records': []})
-    rows = (
+    query = (
         db.session.query(ClassRecord, Student)
         .join(Student, ClassRecord.student_id == Student.id)
         .filter(ClassRecord.subject_id == subject_id, ClassRecord.term == term)
-        .order_by(Student.name).all()
     )
+    if section:
+        query = query.filter(Student.section == section)
+    rows = query.order_by(Student.name).all()
     records = []
     for rec, student in rows:
         records.append({
@@ -662,7 +811,7 @@ def reports():
     if risk_filter in ('High', 'Medium', 'Low'):
         query = query.filter(Prediction.risk_level == risk_filter)
     page = request.args.get('page', 1, type=int)
-    per_page = 15
+    per_page = 10
     pagination = query.order_by(Student.name).paginate(page=page, per_page=per_page, error_out=False)
     data = pagination.items
     return render_template('reports.html', data=data, risk_filter=risk_filter, pagination=pagination)
@@ -712,19 +861,61 @@ def analytics():
 @staff_required
 def interventions():
     status_filter = request.args.get('status', 'all')
-    query = (
-        db.session.query(InterventionLog, Recommendation, Prediction, Student)
-        .join(Recommendation, InterventionLog.recommendation_id == Recommendation.id)
-        .join(Prediction, Recommendation.prediction_id == Prediction.id)
-        .join(Student, Prediction.student_id == Student.id)
+    section_filter = request.args.get('section', '')
+    risk_filter = request.args.get('risk', '')
+    search_q = request.args.get('q', '').strip()
+    selected_student_id = request.args.get('student_id', 0, type=int)
+
+    # Students list for selection (filtered)
+    student_query = db.session.query(Student).join(
+        Prediction, Prediction.student_id == Student.id
     )
-    if status_filter in ('pending', 'in_progress', 'completed', 'ignored'):
-        query = query.filter(InterventionLog.status == status_filter)
-    page = request.args.get('page', 1, type=int)
-    per_page = 15
-    pagination = query.order_by(InterventionLog.id.desc()).paginate(page=page, per_page=per_page, error_out=False)
-    data = pagination.items
-    return render_template('interventions.html', data=data, status_filter=status_filter, pagination=pagination)
+    if section_filter:
+        student_query = student_query.filter(Student.section == section_filter)
+    if risk_filter in ('High', 'Medium'):
+        student_query = student_query.filter(Prediction.risk_level == risk_filter)
+    if search_q:
+        student_query = student_query.filter(Student.name.ilike(f'%{search_q}%'))
+    at_risk_students = student_query.distinct().order_by(Student.name).all()
+
+    # Selected student details
+    selected_student = None
+    student_topics = []
+    student_interventions = []
+    student_prediction = None
+    if selected_student_id:
+        selected_student = db.session.get(Student, selected_student_id)
+        if selected_student:
+            student_prediction = Prediction.query.filter_by(
+                student_id=selected_student_id
+            ).order_by(Prediction.id.desc()).first()
+            # Get topics for the student's subject
+            topics = Topic.query.join(Subject).join(
+                Prediction, Prediction.subject_id == Subject.id
+            ).filter(Prediction.student_id == selected_student_id).all()
+            student_topics = topics if topics else Topic.query.all()
+            # Existing interventions for this student
+            student_interventions = (
+                db.session.query(InterventionLog, Recommendation, Prediction)
+                .join(Recommendation, InterventionLog.recommendation_id == Recommendation.id)
+                .join(Prediction, Recommendation.prediction_id == Prediction.id)
+                .filter(Prediction.student_id == selected_student_id)
+                .order_by(InterventionLog.id.desc()).all()
+            )
+
+    sections = [r[0] for r in db.session.query(Student.section).distinct().order_by(Student.section).all() if r[0]]
+    return render_template('interventions.html',
+                           at_risk_students=at_risk_students,
+                           selected_student=selected_student,
+                           selected_student_id=selected_student_id,
+                           student_topics=student_topics,
+                           student_interventions=student_interventions,
+                           student_prediction=student_prediction,
+                           sections=sections,
+                           status_filter=status_filter,
+                           current_section=section_filter,
+                           current_risk=risk_filter,
+                           search_q=search_q)
 
 
 @app.route('/intervention/<int:log_id>/update', methods=['POST'])
@@ -746,7 +937,80 @@ def update_intervention(log_id):
     log.followed_up_at = date.today().isoformat()
     db.session.commit()
     flash('Intervention updated.', 'success')
+    student_id = request.form.get('student_id', 0, type=int)
+    if student_id:
+        return redirect(url_for('interventions', student_id=student_id))
     return redirect(url_for('interventions'))
+
+
+@app.route('/intervention/assign', methods=['POST'])
+@staff_required
+def assign_intervention():
+    """Assign Special Quiz or Counseling interventions per topic for a student."""
+    student_id = request.form.get('student_id', 0, type=int)
+    topic_ids = request.form.getlist('topic_ids')
+    intervention_types = request.form.getlist('intervention_types')
+
+    if not student_id or not topic_ids:
+        flash('Please select at least one topic.', 'danger')
+        return redirect(url_for('interventions', student_id=student_id))
+
+    student = db.session.get(Student, student_id)
+    if not student:
+        flash('Student not found.', 'danger')
+        return redirect(url_for('interventions'))
+
+    prediction = Prediction.query.filter_by(
+        student_id=student_id
+    ).order_by(Prediction.id.desc()).first()
+    if not prediction:
+        flash('No prediction found for this student. Run predictions first.', 'warning')
+        return redirect(url_for('interventions', student_id=student_id))
+
+    count = 0
+    assigned_topics = []
+    for topic_id, itype in zip(topic_ids, intervention_types):
+        if itype not in ('Special Quiz', 'Counseling'):
+            continue
+        topic = db.session.get(Topic, int(topic_id))
+        if not topic:
+            continue
+        # Create recommendation + intervention log
+        rec = Recommendation(
+            prediction_id=prediction.id,
+            strategy_type=itype,
+            message=f'[{topic.subject.name}] Assigned {itype} for topic "{topic.name}" as part of counseling plan.',
+            topic_name=topic.name,
+        )
+        db.session.add(rec)
+        db.session.flush()
+        log = InterventionLog(recommendation_id=rec.id, status='pending')
+        db.session.add(log)
+        assigned_topics.append(f'{topic.name} ({itype})')
+        count += 1
+
+    # Send notification to the student
+    if count:
+        student_user = User.query.filter_by(student_id=student_id, role='student').first()
+        if student_user:
+            notif_title = f'New Intervention Assigned: {student.name}'
+            notif_message = (
+                f'Your teacher has assigned {count} intervention(s) as part of your counseling plan: '
+                f'{", ".join(assigned_topics)}. '
+                f'Please check your interventions and prepare accordingly.'
+            )
+            notif = Notification(
+                user_id=student_user.id, student_id=student_id,
+                title=notif_title, message=notif_message, type='info',
+            )
+            db.session.add(notif)
+
+    db.session.commit()
+    if count:
+        flash(f'Assigned {count} intervention(s) for {student.name}.', 'success')
+    else:
+        flash('No interventions assigned. Please select topics and types.', 'warning')
+    return redirect(url_for('interventions', student_id=student_id))
 
 
 # ── Notifications ──────────────────────────────────────────────────────────
@@ -1336,6 +1600,242 @@ def download_template():
     output.seek(0)
     return send_file(output, as_attachment=True, download_name='class_records_template.xlsx',
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+# ── Attendance Module (5-Meeting System) ───────────────────────────────────
+
+@app.route('/attendance')
+@staff_required
+def attendance():
+    section_filter = request.args.get('section', '')
+    term_filter = request.args.get('term', 'Prelim')
+
+    sections = [r[0] for r in db.session.query(Student.section).distinct().order_by(Student.section).all() if r[0]]
+
+    students_list = []
+    if section_filter:
+        students_list = Student.query.filter_by(section=section_filter).order_by(Student.name).all()
+
+    # Build attendance grid: student_id -> {meeting_number: record}
+    attendance_grid = {}
+    student_stats = {}
+    if section_filter and students_list:
+        for s in students_list:
+            records = AttendanceRecord.query.filter_by(
+                student_id=s.id, term=term_filter
+            ).order_by(AttendanceRecord.meeting_number).all()
+            meetings = {r.meeting_number: r for r in records}
+            attendance_grid[s.id] = meetings
+            present = sum(1 for r in records if r.status == 'Present')
+            att_grade = _calc_attendance_grade(present)
+            att_risk = _attendance_risk_level(att_grade)
+            student_stats[s.id] = {
+                'present': present, 'absent': len(records) - present,
+                'total': len(records), 'grade': att_grade, 'risk': att_risk,
+            }
+
+    return render_template('attendance.html',
+                           sections=sections,
+                           current_section=section_filter,
+                           current_term=term_filter,
+                           students=students_list,
+                           attendance_grid=attendance_grid,
+                           student_stats=student_stats)
+
+
+@app.route('/attendance/save', methods=['POST'])
+@staff_required
+def save_attendance():
+    section = request.form.get('section', '')
+    term = request.form.get('term', 'Prelim')
+    student_ids = request.form.getlist('student_ids')
+    saved = 0
+
+    for sid_str in student_ids:
+        sid = int(sid_str)
+        for m in range(1, 6):
+            status = request.form.get(f'meeting_{sid}_{m}', '')
+            if not status:
+                continue  # not set yet
+            date_val = request.form.get(f'date_{m}', '')
+            date_obj = date.fromisoformat(date_val) if date_val else None
+            room = request.form.get(f'room_{m}', '')
+
+            existing = AttendanceRecord.query.filter_by(
+                student_id=sid, term=term, meeting_number=m
+            ).first()
+            if existing:
+                existing.status = status
+                existing.date = date_obj or existing.date
+                existing.room = room or existing.room
+            else:
+                rec = AttendanceRecord(
+                    student_id=sid, term=term, meeting_number=m,
+                    date=date_obj, status=status, room=room,
+                )
+                db.session.add(rec)
+            saved += 1
+
+    db.session.commit()
+
+    # Sync attendance grade into ClassRecord and re-predict
+    for sid_str in student_ids:
+        sid = int(sid_str)
+        att_grade = _get_attendance_grade(sid, term)
+        class_records = ClassRecord.query.filter_by(student_id=sid, term=term).all()
+        for cr in class_records:
+            cr.attendance = att_grade
+        if not class_records:
+            for cr in ClassRecord.query.filter_by(student_id=sid).all():
+                cr.attendance = att_grade
+        db.session.commit()
+        _auto_predict_student(sid)
+
+    # Check attendance risk notifications + individual absence alerts
+    for sid_str in student_ids:
+        sid = int(sid_str)
+        _check_attendance_risk_notifications(sid, term)
+        # Send per-meeting absence alerts to parents
+        for m in range(1, 6):
+            status = request.form.get(f'meeting_{sid}_{m}', '')
+            if status == 'Absent':
+                date_val = request.form.get(f'date_{m}', '')
+                _notify_absence(sid, term, m, date_val)
+
+    flash(f'Attendance saved for {len(student_ids)} student(s), {term} term.', 'success')
+    return redirect(url_for('attendance', section=section, term=term))
+
+
+def _check_attendance_risk_notifications(student_id, term='Prelim'):
+    """Auto-notify student + parent when attendance grade indicates High Risk."""
+    student = db.session.get(Student, student_id)
+    if not student:
+        return
+    att_grade = _get_attendance_grade(student_id, term)
+    att_risk = _attendance_risk_level(att_grade)
+    if att_risk == 'Low':
+        return
+
+    records = AttendanceRecord.query.filter_by(student_id=student_id, term=term).all()
+    present = sum(1 for r in records if r.status == 'Present')
+    absent = len(records) - present
+
+    title = f'Attendance Alert: {student.name}'
+    message = (
+        f'{student.name} has {present} present out of {len(records)} meetings ({term}). '
+        f'Attendance Grade: {att_grade}. Risk Level: {att_risk}. '
+    )
+    if att_risk == 'High':
+        message += 'Immediate consultation with the instructor is needed.'
+    else:
+        message += 'Please coordinate with the instructor to improve attendance.'
+
+    student_user = User.query.filter_by(student_id=student_id, role='student').first()
+    parent_user = User.query.filter_by(student_id=student_id, role='parent').first()
+
+    for user in [student_user, parent_user]:
+        if not user:
+            continue
+        existing = Notification.query.filter_by(
+            user_id=user.id, student_id=student_id, title=title, is_read=False
+        ).first()
+        if existing:
+            continue
+        notif = Notification(
+            user_id=user.id, student_id=student_id,
+            title=title, message=message,
+            type='danger' if att_risk == 'High' else 'warning',
+        )
+        db.session.add(notif)
+
+    db.session.commit()
+
+
+def _notify_absence(student_id, term, meeting_number, date_str=''):
+    """Notify parent when their child is marked absent for a specific meeting."""
+    student = db.session.get(Student, student_id)
+    if not student:
+        return
+    parent_user = User.query.filter_by(student_id=student_id, role='parent').first()
+    if not parent_user:
+        return
+
+    date_display = date_str if date_str else f'Meeting {meeting_number}'
+    title = f'Absence Alert: {student.name} – {term} Meeting {meeting_number}'
+
+    # Don't duplicate
+    existing = Notification.query.filter_by(
+        user_id=parent_user.id, student_id=student_id, title=title
+    ).first()
+    if existing:
+        return
+
+    message = (
+        f'Your child {student.name} was marked Absent on {date_display} '
+        f'({term}, Meeting {meeting_number}). '
+        f'Please monitor their attendance and coordinate with their instructor if needed.'
+    )
+    notif = Notification(
+        user_id=parent_user.id, student_id=student_id,
+        title=title, message=message, type='info',
+    )
+    db.session.add(notif)
+    db.session.commit()
+
+
+@app.route('/api/attendance/stats/<int:student_id>')
+@login_required
+def api_attendance_stats(student_id):
+    term = request.args.get('term', 'Prelim')
+    records = AttendanceRecord.query.filter_by(student_id=student_id, term=term).all()
+    present = sum(1 for r in records if r.status == 'Present')
+    att_grade = _calc_attendance_grade(present)
+    att_risk = _attendance_risk_level(att_grade)
+    return jsonify({
+        'present': present, 'absent': len(records) - present,
+        'total': len(records), 'grade': att_grade, 'risk': att_risk,
+    })
+
+
+# ── Parent Attendance Portal ───────────────────────────────────────────────
+
+@app.route('/parent/attendance')
+@login_required
+def parent_attendance():
+    if current_user.role != 'parent' or not current_user.student_id:
+        abort(403)
+    student = db.session.get(Student, current_user.student_id)
+    if not student:
+        abort(404)
+
+    term_filter = request.args.get('term', 'Prelim')
+
+    records = AttendanceRecord.query.filter_by(
+        student_id=student.id, term=term_filter
+    ).order_by(AttendanceRecord.meeting_number).all()
+
+    meetings = []
+    for r in records:
+        meetings.append({
+            'number': r.meeting_number,
+            'date': r.date.strftime('%b %d, %Y') if r.date else '—',
+            'status': r.status,
+        })
+
+    present = sum(1 for r in records if r.status == 'Present')
+    absent = len(records) - present
+    att_grade = _calc_attendance_grade(present)
+    att_risk = _attendance_risk_level(att_grade)
+
+    return render_template('parent_attendance.html',
+                           student=student,
+                           current_term=term_filter,
+                           meetings=meetings,
+                           present=present,
+                           absent=absent,
+                           total=len(records),
+                           grade=att_grade,
+                           risk=att_risk)
 
 
 # ── What-If Simulator ──────────────────────────────────────────────────────

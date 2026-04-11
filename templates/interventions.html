@@ -2,79 +2,290 @@
 {% block title %}Interventions – EduPredict{% endblock %}
 
 {% block content %}
-{% from '_pagination.html' import render_pagination %}
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
     <h4 class="fw-bold mb-0"><i class="bi bi-clipboard2-pulse me-2"></i>Interventions</h4>
 </div>
 
-<!-- Status Filters -->
-<div class="filter-pills mb-3">
-    <a href="{{ url_for('interventions', status='all') }}" class="btn btn-sm {% if status_filter == 'all' %}btn-dark{% else %}btn-outline-secondary{% endif %}">All</a>
-    <a href="{{ url_for('interventions', status='pending') }}" class="btn btn-sm {% if status_filter == 'pending' %}btn-warning{% else %}btn-outline-warning{% endif %}">Pending</a>
-    <a href="{{ url_for('interventions', status='in_progress') }}" class="btn btn-sm {% if status_filter == 'in_progress' %}btn-info{% else %}btn-outline-info{% endif %}">In Progress</a>
-    <a href="{{ url_for('interventions', status='completed') }}" class="btn btn-sm {% if status_filter == 'completed' %}btn-success{% else %}btn-outline-success{% endif %}">Completed</a>
-    <a href="{{ url_for('interventions', status='ignored') }}" class="btn btn-sm {% if status_filter == 'ignored' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Ignored</a>
-</div>
+<div class="row g-3">
+    <!-- Left Panel: Student Selection -->
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent border-0 fw-semibold">
+                <i class="bi bi-person-lines-fill me-2"></i>Select Student
+            </div>
+            <div class="card-body pt-0">
+                <form method="GET" action="{{ url_for('interventions') }}" id="filterForm">
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold mb-1">Section</label>
+                        <select name="section" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="">All Sections</option>
+                            {% for sec in sections %}
+                            <option value="{{ sec }}" {% if current_section == sec %}selected{% endif %}>{{ sec }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold mb-1">Risk Level</label>
+                        <select name="risk" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="">All Risk</option>
+                            <option value="High" {% if current_risk == 'High' %}selected{% endif %}>High Risk</option>
+                            <option value="Medium" {% if current_risk == 'Medium' %}selected{% endif %}>Medium Risk</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold mb-1">Search</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                            <input type="text" name="q" class="form-control" placeholder="Student name..." value="{{ search_q }}">
+                        </div>
+                    </div>
+                </form>
 
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-journal-medical me-2"></i>Intervention Log</span>
-        <span class="badge bg-secondary">{{ pagination.total }}</span>
-    </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead>
-                    <tr>
-                        <th>Student</th>
-                        <th class="d-none d-md-table-cell">Recommendation</th>
-                        <th>Status</th>
-                        <th class="d-none d-md-table-cell">Outcome</th>
-                        <th class="d-none d-lg-table-cell">Notes</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for log, rec, pred, student in data %}
-                <tr>
-                    <td>
-                        <a href="{{ url_for('student_profile', student_id=student.id) }}" class="fw-medium text-decoration-none">{{ student.name }}</a>
-                    </td>
-                    <td class="d-none d-md-table-cell" style="max-width:280px;">
-                        <span class="badge bg-light text-dark border mb-1">{{ rec.strategy_type }}</span><br>
-                        <small class="text-muted">{{ rec.message[:100] }}{% if rec.message|length > 100 %}…{% endif %}</small>
-                    </td>
-                    <td>
-                        <span class="badge {% if log.status == 'pending' %}bg-warning-subtle text-warning{% elif log.status == 'completed' %}bg-success-subtle text-success{% elif log.status == 'in_progress' %}bg-info-subtle text-info{% else %}bg-secondary-subtle text-secondary{% endif %}">
-                            {{ log.status|replace('_', ' ')|title }}
-                        </span>
-                    </td>
-                    <td class="d-none d-md-table-cell">{{ (log.outcome or '—')|replace('_', ' ')|title }}</td>
-                    <td class="d-none d-lg-table-cell small text-muted">{{ log.notes or '—' }}</td>
-                    <td>
-                        <form method="POST" action="{{ url_for('update_intervention', log_id=log.id) }}" class="d-flex flex-column gap-1" style="min-width:140px;">
-                            <select name="status" class="form-select form-select-sm">
-                                {% for st in ['pending','in_progress','completed','ignored'] %}
-                                <option value="{{ st }}" {{ 'selected' if log.status == st }}>{{ st|replace('_',' ')|title }}</option>
-                                {% endfor %}
-                            </select>
-                            <select name="outcome" class="form-select form-select-sm">
-                                <option value="">-- outcome --</option>
-                                {% for oc in ['improved','no_change','declined'] %}
-                                <option value="{{ oc }}" {{ 'selected' if log.outcome == oc }}>{{ oc|replace('_',' ')|title }}</option>
-                                {% endfor %}
-                            </select>
-                            <input name="notes" class="form-control form-control-sm" placeholder="Notes..." value="{{ log.notes or '' }}">
-                            <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-check-lg"></i> Update</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
+                <!-- Student List -->
+                <div class="list-group list-group-flush" style="max-height:400px;overflow-y:auto;">
+                    {% for s in at_risk_students %}
+                    {% set s_pred = None %}
+                    <a href="{{ url_for('interventions', student_id=s.id, section=current_section, risk=current_risk, q=search_q) }}"
+                       class="list-group-item list-group-item-action d-flex align-items-center py-2 {% if selected_student_id == s.id %}active{% endif %}">
+                        <div class="flex-grow-1 min-width-0">
+                            <div class="fw-medium text-truncate {% if selected_student_id == s.id %}text-white{% endif %}">{{ s.name }}</div>
+                            <small class="{% if selected_student_id == s.id %}text-white-50{% else %}text-muted{% endif %}">{{ s.section }}</small>
+                        </div>
+                    </a>
+                    {% else %}
+                    <div class="text-center text-muted py-3">
+                        <i class="bi bi-info-circle me-1"></i>No students found. Adjust filters or run predictions.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
     </div>
+
+    <!-- Right Panel: Student Counseling Plan -->
+    <div class="col-md-8">
+        {% if selected_student %}
+        <!-- Student Header -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body py-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style="width:50px;height:50px;min-width:50px;">
+                        <i class="bi bi-person-fill text-primary fs-4"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h5 class="fw-bold mb-0">{{ selected_student.name }}</h5>
+                        <small class="text-muted">{{ selected_student.section }} &bull; Year {{ selected_student.year_level }}</small>
+                    </div>
+                    {% if student_prediction %}
+                    <span class="badge badge-{{ student_prediction.risk_level|lower }} fs-6 px-3 py-2">
+                        {{ student_prediction.risk_level }} Risk
+                    </span>
+                    {% endif %}
+                    <a href="{{ url_for('student_profile', student_id=selected_student.id) }}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-person-badge me-1"></i>Profile
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assign Interventions by Topic -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-transparent border-0 fw-semibold">
+                <i class="bi bi-journal-plus me-2"></i>Assign Interventions by Topic
+            </div>
+            <div class="card-body pt-0">
+                {% if student_topics %}
+                <form method="POST" action="{{ url_for('assign_intervention') }}">
+                    <input type="hidden" name="student_id" value="{{ selected_student.id }}">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width:40px;">
+                                        <input type="checkbox" class="form-check-input" id="selectAll" title="Select all">
+                                    </th>
+                                    <th>Topic</th>
+                                    <th style="width:180px;">Intervention Type</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for topic in student_topics %}
+                                <tr>
+                                    <td>
+                                        <input type="checkbox" class="form-check-input topic-check"
+                                               name="topic_ids" value="{{ topic.id }}">
+                                    </td>
+                                    <td>
+                                        <div class="fw-medium">{{ topic.name }}</div>
+                                        <small class="text-muted">{{ topic.subject.name }}</small>
+                                    </td>
+                                    <td>
+                                        <select name="intervention_types" class="form-select form-select-sm">
+                                            <option value="Special Quiz">Special Quiz</option>
+                                            <option value="Counseling">Counseling</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-3 d-flex justify-content-between align-items-center">
+                        <small class="text-muted"><i class="bi bi-info-circle me-1"></i>Select topics and choose quiz type, then assign as part of the counseling plan.</small>
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bi bi-plus-circle me-1"></i>Assign Selected
+                        </button>
+                    </div>
+                </form>
+                {% else %}
+                <p class="text-muted text-center py-3 mb-0">No topics available. Ensure subjects have topics defined.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Existing Interventions (Counseling Plan) -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent border-0">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-semibold"><i class="bi bi-journal-medical me-2"></i>Counseling Plan</span>
+                    <span class="badge bg-secondary">{{ student_interventions|length }}</span>
+                </div>
+                <!-- Counseling Plan Filters -->
+                {% if student_interventions %}
+                <div class="d-flex flex-wrap gap-1">
+                    <button class="btn btn-sm btn-dark cp-filter active" data-filter="all">All</button>
+                    <button class="btn btn-sm btn-outline-warning cp-filter" data-filter="Special Quiz">Special Quiz</button>
+                    <button class="btn btn-sm btn-outline-info cp-filter" data-filter="Counseling">Counseling</button>
+                    <span class="vr mx-1"></span>
+                    <button class="btn btn-sm btn-outline-warning cp-status-filter" data-status="pending">Pending</button>
+                    <button class="btn btn-sm btn-outline-info cp-status-filter" data-status="in_progress">In Progress</button>
+                    <button class="btn btn-sm btn-outline-success cp-status-filter" data-status="completed">Completed</button>
+                </div>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                {% if student_interventions %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Details</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="counselingBody">
+                            {% for log, rec, pred in student_interventions %}
+                            <tr data-type="{{ rec.strategy_type }}" data-status="{{ log.status }}">
+                                <td>
+                                    <span class="badge {% if rec.strategy_type == 'Counseling' %}bg-info-subtle text-info{% elif rec.strategy_type == 'Special Quiz' %}bg-warning-subtle text-warning{% else %}bg-primary-subtle text-primary{% endif %}">
+                                        {{ rec.strategy_type }}
+                                    </span>
+                                    {% if rec.topic_name %}
+                                    <br><small class="text-muted">{{ rec.topic_name }}</small>
+                                    {% endif %}
+                                </td>
+                                <td style="max-width:280px;">
+                                    <small class="text-muted">{{ rec.message }}</small>
+                                </td>
+                                <td>
+                                    <span class="badge {% if log.status == 'pending' %}bg-warning-subtle text-warning{% elif log.status == 'completed' %}bg-success-subtle text-success{% elif log.status == 'in_progress' %}bg-info-subtle text-info{% else %}bg-secondary-subtle text-secondary{% endif %}">
+                                        {{ log.status|replace('_', ' ')|title }}
+                                    </span>
+                                    {% if log.outcome %}
+                                    <br><small class="text-muted">{{ log.outcome|replace('_', ' ')|title }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <form method="POST" action="{{ url_for('update_intervention', log_id=log.id) }}" class="d-flex flex-column gap-1" style="min-width:130px;">
+                                        <input type="hidden" name="student_id" value="{{ selected_student.id }}">
+                                        <select name="status" class="form-select form-select-sm">
+                                            {% for st in ['pending','in_progress','completed','ignored'] %}
+                                            <option value="{{ st }}" {{ 'selected' if log.status == st }}>{{ st|replace('_',' ')|title }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <select name="outcome" class="form-select form-select-sm">
+                                            <option value="">-- outcome --</option>
+                                            {% for oc in ['improved','no_change','declined'] %}
+                                            <option value="{{ oc }}" {{ 'selected' if log.outcome == oc }}>{{ oc|replace('_',' ')|title }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <input name="notes" class="form-control form-control-sm" placeholder="Notes..." value="{{ log.notes or '' }}">
+                                        <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-check-lg"></i> Update</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-center text-muted py-4 mb-0">No interventions assigned yet. Select topics above to begin.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {% else %}
+        <!-- No student selected -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-person-bounding-box text-muted" style="font-size:3rem;"></i>
+                <h5 class="mt-3 fw-semibold text-muted">Select a Student</h5>
+                <p class="text-muted mb-0">Choose a student from the list to view their counseling plan and assign interventions by topic.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
 </div>
 
-{{ render_pagination(pagination, 'interventions', {'status': status_filter}) }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAll = document.getElementById('selectAll');
+    if (selectAll) {
+        selectAll.addEventListener('change', function() {
+            document.querySelectorAll('.topic-check').forEach(cb => cb.checked = this.checked);
+        });
+    }
+
+    // Counseling Plan filters
+    let activeType = 'all';
+    let activeStatus = '';
+
+    function applyCPFilters() {
+        document.querySelectorAll('#counselingBody tr[data-type]').forEach(row => {
+            const typeMatch = activeType === 'all' || row.dataset.type === activeType;
+            const statusMatch = !activeStatus || row.dataset.status === activeStatus;
+            row.style.display = (typeMatch && statusMatch) ? '' : 'none';
+        });
+    }
+
+    document.querySelectorAll('.cp-filter').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.cp-filter').forEach(b => {
+                b.classList.remove('active', 'btn-dark', 'btn-primary', 'btn-warning', 'btn-info');
+                b.classList.add('btn-outline-' + (b.dataset.filter === 'all' ? 'secondary' : b.dataset.filter === 'Special Quiz' ? 'warning' : 'info'));
+            });
+            this.classList.remove('btn-outline-secondary', 'btn-outline-warning', 'btn-outline-info');
+            this.classList.add('active', this.dataset.filter === 'all' ? 'btn-dark' : this.dataset.filter === 'Special Quiz' ? 'btn-warning' : 'btn-info');
+            activeType = this.dataset.filter;
+            applyCPFilters();
+        });
+    });
+
+    document.querySelectorAll('.cp-status-filter').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (activeStatus === this.dataset.status) {
+                this.classList.remove('active');
+                activeStatus = '';
+            } else {
+                document.querySelectorAll('.cp-status-filter').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                activeStatus = this.dataset.status;
+            }
+            applyCPFilters();
+        });
+    });
+});
+</script>
 {% endblock %}

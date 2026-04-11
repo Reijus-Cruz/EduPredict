@@ -14,25 +14,37 @@
 
 <!-- Info Cards -->
 <div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md-2">
         <div class="card stat-card h-100"><div class="card-body">
             <div class="text-muted small text-uppercase fw-semibold">Section</div>
             <div class="fs-4 fw-bold mt-1">{{ student.section }}</div>
         </div></div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md-2">
         <div class="card stat-card h-100"><div class="card-body">
             <div class="text-muted small text-uppercase fw-semibold">Year Level</div>
             <div class="fs-4 fw-bold mt-1">{{ student.year_level }}</div>
         </div></div>
     </div>
-    <div class="col-12 col-md-3">
+    <div class="col-6 col-md-2">
+        <div class="card stat-card h-100"><div class="card-body">
+            <div class="text-muted small text-uppercase fw-semibold">Semester</div>
+            <div class="fw-bold mt-1">{{ student.semester or '—' }}</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card stat-card h-100"><div class="card-body">
+            <div class="text-muted small text-uppercase fw-semibold">School Year</div>
+            <div class="fw-bold mt-1">{{ student.school_year or '—' }}</div>
+        </div></div>
+    </div>
+    <div class="col-12 col-md-2">
         <div class="card stat-card h-100"><div class="card-body">
             <div class="text-muted small text-uppercase fw-semibold">Email</div>
             <div class="fw-medium mt-1 text-truncate">{{ student.email }}</div>
         </div></div>
     </div>
-    <div class="col-12 col-md-3">
+    <div class="col-12 col-md-2">
         <div class="card stat-card h-100"><div class="card-body">
             <div class="text-muted small text-uppercase fw-semibold">Status</div>
             <div class="mt-1">
@@ -128,7 +140,7 @@
     {% endif %}
 
     <!-- Risk Assessment -->
-    {% if predictions %}
+    {% if predictions and not current_user.is_parent %}
     <div class="accordion-item">
         <h2 class="accordion-header">
             <button class="accordion-button {% if not pre_exam_data %}{% else %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRisk">
@@ -177,7 +189,7 @@
     {% endif %}
 
     <!-- Recommendations -->
-    {% if predictions %}
+    {% if predictions and not current_user.is_parent %}
     {% set has_recs = [] %}
     {% for p in predictions %}{% for r in p.recommendations %}{% if has_recs.append(1) %}{% endif %}{% endfor %}{% endfor %}
     {% if has_recs %}
@@ -198,7 +210,7 @@
                 </h6>
                 {% for r in p.recommendations %}
                 <div class="rec-item">
-                    <span class="badge {% if r.strategy_type == 'Counseling' %}bg-danger-subtle text-danger{% elif r.strategy_type == 'Extra Quiz' %}bg-info-subtle text-info{% elif r.strategy_type == 'Tutoring' %}bg-primary-subtle text-primary{% else %}bg-warning-subtle text-warning{% endif %} mb-1">{{ r.strategy_type }}</span>
+                    <span class="badge {% if r.strategy_type == 'Counseling' %}bg-danger-subtle text-danger{% elif r.strategy_type == 'Special Quiz' %}bg-warning-subtle text-warning{% else %}bg-info-subtle text-info{% endif %} mb-1">{{ r.strategy_type }}</span>
                     <div class="small">{{ r.message }}</div>
                 </div>
                 {% endfor %}
@@ -228,11 +240,13 @@
                         {% for subj_name, fi in fi_data.items() %}
                         <p class="fw-medium mb-2 small">{{ subj_name }}</p>
                         {% for feat, imp in fi.items() %}
+                        {% if imp is number and feat not in ('max_possible_grade','exam_needed','exam_needed_raw','exam_max_items','attendance_pct') %}
                         <div class="d-flex align-items-center gap-2 mb-1">
                             <span class="small text-muted" style="width:120px;">{{ feat }}</span>
                             <div class="fi-bar-bg flex-grow-1"><div class="fi-bar" style="width:{{ (imp*100)|round(1) }}%"></div></div>
                             <span class="small text-muted" style="width:40px;text-align:right;">{{ (imp*100)|round(1) }}%</span>
                         </div>
+                        {% endif %}
                         {% endfor %}
                         {% if not loop.last %}<hr class="my-2">{% endif %}
                         {% endfor %}
@@ -290,6 +304,7 @@
     {% endif %}
 
     <!-- Grade Trends -->
+    {% if not current_user.is_parent %}
     <div class="accordion-item">
         <h2 class="accordion-header">
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseChart">
@@ -300,6 +315,7 @@
             <div class="accordion-body"><canvas id="gradeChart" height="100"></canvas></div>
         </div>
     </div>
+    {% endif %}
 
     <!-- Class Records -->
     <div class="accordion-item">
@@ -319,8 +335,10 @@
                                 <th class="d-none d-md-table-cell">Exam</th>
                                 <th class="d-none d-md-table-cell">Task Perf.</th>
                                 <th class="d-none d-lg-table-cell">Attendance</th>
+                                {% if not current_user.is_parent %}
                                 <th class="d-none d-lg-table-cell">Late</th>
                                 <th class="d-none d-lg-table-cell">Missing</th>
+                                {% endif %}
                                 <th>Grade</th>
                             </tr>
                         </thead>
@@ -332,9 +350,17 @@
                             <td class="d-none d-md-table-cell">{{ r.class_standing }}</td>
                             <td class="d-none d-md-table-cell">{{ r.exam_score }}</td>
                             <td class="d-none d-md-table-cell">{{ r.task_performance }}</td>
-                            <td class="d-none d-lg-table-cell">{{ r.attendance }}%</td>
+                            <td class="d-none d-lg-table-cell">
+                                {% if current_user.is_parent %}
+                                {{ att_present }}/5 Present
+                                {% else %}
+                                {{ r.attendance }}%
+                                {% endif %}
+                            </td>
+                            {% if not current_user.is_parent %}
                             <td class="d-none d-lg-table-cell">{{ r.late_submissions }}</td>
                             <td class="d-none d-lg-table-cell">{{ r.missing_submissions }}</td>
+                            {% endif %}
                             <td>
                                 <span class="fw-bold {% if r.final_grade < 75 %}text-danger{% elif r.final_grade < 80 %}text-warning{% else %}text-success{% endif %}">
                                     {{ r.final_grade }}
@@ -352,6 +378,7 @@
 {% endblock %}
 
 {% block scripts %}
+{% if not current_user.is_parent %}
 <script>
 const COLORS = ['#4f46e5','#10b981','#ef4444','#f59e0b','#06b6d4','#64748b'];
 fetch('/api/student/{{ student.id }}/grades')
@@ -378,4 +405,5 @@ fetch('/api/student/{{ student.id }}/grades')
         });
     });
 </script>
+{% endif %}
 {% endblock %}

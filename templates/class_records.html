@@ -40,7 +40,7 @@
     <div class="tab-pane fade show active" id="tab-records" role="tabpanel">
 {% endif %}
 
-        <!-- Term Filter -->
+        <!-- Term & Section Filters -->
         <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
             <span class="fw-semibold text-muted small">Term:</span>
             <div class="btn-group btn-group-sm" id="termFilter" role="group">
@@ -48,6 +48,13 @@
                 <button type="button" class="btn btn-outline-primary" data-term="Midterm">Midterm</button>
                 <button type="button" class="btn btn-outline-primary" data-term="Finals">Finals</button>
             </div>
+            <span class="fw-semibold text-muted small ms-2">Section:</span>
+            <select class="form-select form-select-sm" id="sectionFilter" style="width:auto;min-width:140px;">
+                <option value="">All Sections</option>
+                {% for sec in sections %}
+                <option value="{{ sec }}">{{ sec }}</option>
+                {% endfor %}
+            </select>
             <div class="ms-auto" style="max-width:280px;width:100%">
                 <div class="input-group input-group-sm">
                     <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
@@ -91,8 +98,8 @@
                                         <th>#</th>
                                         <th>Student</th>
                                         <th class="d-none d-md-table-cell">Class Standing (20%)</th>
-                                        <th class="d-none d-md-table-cell exam-header">Prelim Exam (50%)</th>
                                         <th class="d-none d-md-table-cell">Task Performance (30%)</th>
+                                        <th class="d-none d-md-table-cell exam-header">Prelim Exam (50%)</th>
                                         <th class="d-none d-lg-table-cell">Attendance</th>
                                         <th>Grade</th>
                                         {% if current_user.is_staff %}<th></th>{% endif %}
@@ -100,12 +107,12 @@
                                 </thead>
                                 <tbody>
                                 {% for rec, student, subj in subj_records %}
-                                <tr data-term="{{ rec.term }}">
+                                <tr data-term="{{ rec.term }}" data-section="{{ student.section }}">
                                     <td class="row-num"></td>
                                     <td class="fw-medium">{{ student.name }}</td>
                                     <td class="d-none d-md-table-cell">{{ rec.class_standing }}</td>
-                                    <td class="d-none d-md-table-cell">{{ rec.exam_score }}</td>
                                     <td class="d-none d-md-table-cell">{{ rec.task_performance }}</td>
+                                    <td class="d-none d-md-table-cell">{{ rec.exam_score }}</td>
                                     <td class="d-none d-lg-table-cell">{{ rec.attendance }}%</td>
                                     <td>
                                         <span class="fw-bold {% if rec.final_grade < 75 %}text-danger{% elif rec.final_grade < 80 %}text-warning{% else %}text-success{% endif %}">
@@ -173,6 +180,19 @@
                         </div>
                     </div>
                     <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="semester" class="form-label">Semester</label>
+                            <select class="form-select" name="semester">
+                                <option value="1st Semester">1st Semester</option>
+                                <option value="2nd Semester">2nd Semester</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="school_year" class="form-label">School Year</label>
+                            <input type="text" class="form-control" name="school_year" value="AY 2025-2026" placeholder="e.g. AY 2025-2026">
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
                         <div class="col-6 col-md-3">
                             <label for="class_standing" class="form-label">Class Standing (20%)</label>
                             <input class="form-control" type="number" step="0.01" min="0" max="100" name="class_standing" id="class_standing" required>
@@ -204,7 +224,7 @@
             <div class="card-body">
                 <form method="POST" action="{{ url_for('bulk_exam_scores') }}">
                     <div class="row g-3 mb-3">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label for="exam_subject_id" class="form-label">Subject</label>
                             <select class="form-select" name="subject_id" id="exam_subject_id" required>
                                 {% for sub in subjects %}
@@ -212,13 +232,35 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label for="exam_term" class="form-label">Term</label>
                             <select class="form-select" name="term" id="exam_term" required>
                                 <option value="Prelim">Prelim Exam</option>
                                 <option value="Midterm">Midterm Exam</option>
                                 <option value="Finals">Finals Exam</option>
                             </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="exam_section" class="form-label">Section</label>
+                            <select class="form-select" name="section" id="exam_section">
+                                <option value="">All Sections</option>
+                                {% for sec in sections %}
+                                <option value="{{ sec }}">{{ sec }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="exam_semester" class="form-label">Semester</label>
+                            <select class="form-select" name="semester" id="exam_semester">
+                                <option value="1st Semester">1st Semester</option>
+                                <option value="2nd Semester">2nd Semester</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label for="exam_school_year" class="form-label">Academic Year</label>
+                            <input type="text" class="form-control" name="school_year" id="exam_school_year" value="AY 2025-2026" placeholder="e.g. AY 2025-2026">
                         </div>
                         <div class="col-md-4 d-flex align-items-end">
                             <button type="button" class="btn btn-outline-primary w-100" id="loadStudentsBtn">
@@ -339,6 +381,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function applyFilters() {
         const term = getActiveTerm();
         const q = document.getElementById('recordSearch').value.toLowerCase();
+        const sec = document.getElementById('sectionFilter').value;
         // Update exam column headers to match selected term
         document.querySelectorAll('.exam-header').forEach(th => {
             th.textContent = term + ' Exam (50%)';
@@ -347,7 +390,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const termMatch = row.dataset.term === term;
             const name = row.cells[1] ? row.cells[1].textContent.toLowerCase() : '';
             const nameMatch = !q || name.includes(q);
-            row.style.display = (termMatch && nameMatch) ? '' : 'none';
+            const sectionMatch = !sec || row.dataset.section === sec;
+            row.style.display = (termMatch && nameMatch && sectionMatch) ? '' : 'none';
         });
         // Update row numbers
         document.querySelectorAll('#subjectTabContent table').forEach(table => {
@@ -360,15 +404,15 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
         // Update subject pill badges
-        const term2 = term;
         document.querySelectorAll('#subjectPills .nav-link').forEach(pill => {
             const target = pill.getAttribute('data-bs-target');
             const pane = document.querySelector(target);
             if (pane) {
                 let visible = 0;
-                pane.querySelectorAll('tbody tr[data-term="' + term2 + '"]').forEach(row => {
+                pane.querySelectorAll('tbody tr[data-term="' + term + '"]').forEach(row => {
                     const name = row.cells[1] ? row.cells[1].textContent.toLowerCase() : '';
-                    if (!q || name.includes(q)) visible++;
+                    const sectionMatch = !sec || row.dataset.section === sec;
+                    if ((!q || name.includes(q)) && sectionMatch) visible++;
                 });
                 const badge = pill.querySelector('.badge');
                 if (badge) badge.textContent = visible;
@@ -383,6 +427,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     document.getElementById('recordSearch').addEventListener('input', applyFilters);
+    document.getElementById('sectionFilter').addEventListener('change', applyFilters);
     // Initialize with Prelim
     applyFilters();
 
@@ -392,7 +437,10 @@ document.addEventListener('DOMContentLoaded', function() {
         loadBtn.addEventListener('click', function() {
             const subjectId = document.getElementById('exam_subject_id').value;
             const term = document.getElementById('exam_term').value;
-            fetch(`/api/class-records?subject_id=${subjectId}&term=${term}`)
+            const section = document.getElementById('exam_section').value;
+            let url = `/api/class-records?subject_id=${subjectId}&term=${term}`;
+            if (section) url += `&section=${encodeURIComponent(section)}`;
+            fetch(url)
                 .then(r => r.json())
                 .then(data => {
                     const tbody = document.getElementById('examScoresBody');

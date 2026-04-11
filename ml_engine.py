@@ -107,35 +107,40 @@ def _get_weak_topics(session, student_id, subject_id):
 def _generate_recommendations(session, student_id, subject_id, risk_level,
                                class_standing, exam, task_performance, attendance,
                                trend, cluster):
-    from app import Subject
+    from app import Subject, AttendanceRecord, _calc_attendance_grade
     subject = session.get(Subject, subject_id)
     subj_name = subject.name if subject else 'this subject'
     recs = []
 
+    # Use AttendanceRecord for actual attendance data (5-meeting system)
+    att_records = session.query(AttendanceRecord).filter_by(student_id=student_id).all()
+    att_present = sum(1 for r in att_records if r.status == 'Present')
+    att_grade = _calc_attendance_grade(att_present)
+
     weak = _get_weak_topics(session, student_id, subject_id)
     for topic_name, avg_pct in weak:
-        recs.append(('Extra Quiz',
-                      f'[{subj_name}] Weak in "{topic_name}" (avg {avg_pct}%%). Assign additional quizzes and targeted review exercises for this topic.',
+        recs.append(('Special Quiz',
+                      f'[{subj_name}] Weak in "{topic_name}" (avg {avg_pct}%%). Assign a special quiz and targeted review exercises for this topic.',
                       topic_name))
 
-    if attendance < 80:
+    if att_grade <= 80:
         recs.append(('Counseling',
-                      f'[{subj_name}] Attendance is critically low ({attendance:.0f}%%). Schedule attendance counseling and notify parent/guardian immediately.',
+                      f'[{subj_name}] Attendance grade is low ({att_grade}, {att_present}/5 meetings present). Schedule attendance counseling and notify parent/guardian immediately.',
                       None))
 
     if class_standing < 75:
-        recs.append(('Extra Quiz',
-                      f'[{subj_name}] Class Standing is below passing ({class_standing:.1f}). Assign additional practice quizzes and review drills specifically for {subj_name}.',
+        recs.append(('Special Quiz',
+                      f'[{subj_name}] Class Standing is below passing ({class_standing:.1f}). Assign a special quiz and review drills specifically for {subj_name}.',
                       None))
 
     if exam < 75:
-        recs.append(('Tutoring',
-                      f'[{subj_name}] Exam score below passing ({exam:.1f}). Schedule peer tutoring or remedial exam preparation sessions for {subj_name}.',
+        recs.append(('Special Quiz',
+                      f'[{subj_name}] Exam score below passing ({exam:.1f}). Schedule a special remedial quiz or exam preparation session for {subj_name}.',
                       None))
 
     if task_performance < 75:
-        recs.append(('Extra Activity',
-                      f'[{subj_name}] Task Performance is low ({task_performance:.1f}). Provide supplementary {subj_name} activities and guided practice exercises.',
+        recs.append(('Special Quiz',
+                      f'[{subj_name}] Task Performance is low ({task_performance:.1f}). Provide a special quiz and guided practice exercises for {subj_name}.',
                       None))
 
     if trend < -2:
@@ -149,27 +154,27 @@ def _generate_recommendations(session, student_id, subject_id, risk_level,
                       None))
 
     if cluster == 'Declining Performer' and trend < 0:
-        recs.append(('Tutoring',
-                      f'[{subj_name}] Student was performing well but is declining. Early tutoring intervention for {subj_name} can reverse this trend.',
+        recs.append(('Counseling',
+                      f'[{subj_name}] Student was performing well but is declining. Schedule counseling to address the decline in {subj_name}.',
                       None))
 
     # Pre-exam: minimum exam grade recommendation for at-risk students
     if risk_level in ('High', 'Medium'):
         pre_exam = calculate_pre_exam_prediction(class_standing, task_performance)
         if not pre_exam['achievable']:
-            recs.append(('Extra Activity',
+            recs.append(('Special Quiz',
                           f'[{subj_name}] Even a perfect exam score (100) would only yield {pre_exam["max_possible_grade"]:.1f}. '
-                          f'Complete extra credit activities, make-up work, and additional quizzes to recover grades.',
+                          f'Schedule special quizzes, make-up work, and additional assessments to recover grades.',
                           None))
         elif pre_exam['exam_needed'] > 90:
             recs.append(('Counseling',
                           f'[{subj_name}] Needs at least {pre_exam["exam_needed"]:.1f} on the exam to pass. '
-                          f'Attend intensive tutoring, take practice exams, and schedule counseling/consultation.',
+                          f'Schedule counseling/consultation and take practice exams.',
                           None))
         elif pre_exam['exam_needed'] > 75:
-            recs.append(('Extra Quiz',
+            recs.append(('Special Quiz',
                           f'[{subj_name}] Needs at least {pre_exam["exam_needed"]:.1f} on the exam to pass. '
-                          f'Take additional review quizzes and attend consultation sessions.',
+                          f'Take a special review quiz and attend consultation sessions.',
                           None))
 
     if risk_level == 'High' and not recs:
@@ -178,8 +183,8 @@ def _generate_recommendations(session, student_id, subject_id, risk_level,
                       None))
 
     if risk_level == 'Medium' and not recs:
-        recs.append(('Extra Activity',
-                      f'[{subj_name}] Performance is borderline. Assign additional {subj_name} study materials and schedule regular progress check-ins.',
+        recs.append(('Counseling',
+                      f'[{subj_name}] Performance is borderline. Schedule counseling and regular progress check-ins for {subj_name}.',
                       None))
 
     return recs
@@ -218,16 +223,58 @@ def _run_prediction(session, model, feature_importances, pairs_data, use_ml):
         predicted_grade += trend
         predicted_grade = max(0, min(100, predicted_grade))
 
-        # Override risk using pre-exam logic:
-        # High = max possible grade < 75 (can't pass even with perfect exam)
-        # Medium = can pass but needs exam > 85
-        # Low = has decent component scores, achievable exam target
+        # Multi-factor risk classification
+        # Uses: attendance grade (5-meeting system), class standing (quiz),
+        #       task performance (lab), exam score, and pre-exam achievability
+        from app import AttendanceRecord, _calc_attendance_grade, _attendance_risk_level
+        att_records = session.query(AttendanceRecord).filter_by(student_id=student_id).all()
+        att_present = sum(1 for r in att_records if r.status == 'Present')
+        att_grade = _calc_attendance_grade(att_present)
+        att_risk = _attendance_risk_level(att_grade)
+
         pre_exam = calculate_pre_exam_prediction(latest.class_standing, latest.task_performance)
         max_possible = pre_exam['max_possible_grade']
         exam_needed = pre_exam['exam_needed']
+
+        # High Risk: any critical factor
+        #   - Attendance grade <= 60 (0-1 present out of 5 meetings)
+        #   - Class Standing (quiz) < 65 (consistently low)
+        #   - Task Performance (lab) < 65 (incomplete labs)
+        #   - Exam score < 60 (very low exam)
+        #   - Max possible grade < 75 (can't pass even with perfect exam)
+        high_flags = []
+        if att_grade <= 60:
+            high_flags.append(f'attendance_grade={att_grade} ({att_present}/5 present)')
+        if latest.class_standing < 65:
+            high_flags.append(f'quiz={latest.class_standing:.0f}')
+        if latest.task_performance < 65:
+            high_flags.append(f'lab={latest.task_performance:.0f}')
+        if latest.exam_score < 60:
+            high_flags.append(f'exam={latest.exam_score:.0f}')
         if max_possible < 75:
+            high_flags.append(f'max_possible={max_possible:.1f}')
+
+        # Medium Risk: borderline factors
+        #   - Attendance grade 70-80 (2-3 present out of 5 meetings)
+        #   - Class Standing 65-74 (average quiz)
+        #   - Task Performance 65-74 (some incomplete labs)
+        #   - Exam score 60-74 (borderline exam)
+        #   - Needs exam > 85 to pass
+        medium_flags = []
+        if 70 <= att_grade <= 80:
+            medium_flags.append(f'attendance_grade={att_grade} ({att_present}/5 present)')
+        if 65 <= latest.class_standing < 75:
+            medium_flags.append(f'quiz={latest.class_standing:.0f}')
+        if 65 <= latest.task_performance < 75:
+            medium_flags.append(f'lab={latest.task_performance:.0f}')
+        if 60 <= latest.exam_score < 75:
+            medium_flags.append(f'exam={latest.exam_score:.0f}')
+        if exam_needed > 85 and max_possible >= 75:
+            medium_flags.append(f'exam_needed={exam_needed:.0f}%')
+
+        if high_flags:
             risk_level = 'High'
-        elif exam_needed > 85:
+        elif medium_flags:
             risk_level = 'Medium'
         else:
             risk_level = 'Low'
@@ -236,11 +283,14 @@ def _run_prediction(session, model, feature_importances, pairs_data, use_ml):
         if feature_importances is not None:
             for name, imp in zip(FEATURE_NAMES, feature_importances):
                 fi_dict[name] = round(float(imp), 4)
-        # Store pre-exam data for percentage indicator display
+        # Store pre-exam and risk factor data
         fi_dict['max_possible_grade'] = round(max_possible, 2)
         fi_dict['exam_needed'] = round(max(0, exam_needed), 2)
         fi_dict['exam_needed_raw'] = pre_exam['exam_needed_raw']
         fi_dict['exam_max_items'] = pre_exam['exam_max_items']
+        fi_dict['attendance_pct'] = round(att_grade, 1)
+        fi_dict['high_risk_flags'] = high_flags
+        fi_dict['medium_risk_flags'] = medium_flags
 
         old = session.query(Prediction).filter_by(
             student_id=student_id, subject_id=subject_id
@@ -383,6 +433,7 @@ def calculate_pre_exam_prediction(class_standing, task_performance, passing_grad
 
 def simulate_what_if(session, class_standing, exam_score, task_performance,
                      attendance):
+    """attendance param = attendance grade (50-100, from 5-meeting system)."""
     X_all, y_all, _ = _build_features_all(session)
     use_ml = len(X_all) >= 10 and len(set(y_all)) >= 2
 
@@ -403,11 +454,37 @@ def simulate_what_if(session, class_standing, exam_score, task_performance,
         confidence = 0.85
         fi = {}
 
-    # Override risk with pre-exam logic
+    # Override risk with multi-factor logic
+    from app import _attendance_risk_level
+    att_risk = _attendance_risk_level(attendance)
+
     pre_exam = calculate_pre_exam_prediction(class_standing, task_performance)
+
+    high_flags = []
+    if att_risk == 'High':
+        high_flags.append(f'attendance_grade={attendance}')
+    if class_standing < 65:
+        high_flags.append(f'quiz={class_standing:.0f}')
+    if task_performance < 65:
+        high_flags.append(f'lab={task_performance:.0f}')
+    if exam_score < 60:
+        high_flags.append(f'exam={exam_score:.0f}')
     if pre_exam['max_possible_grade'] < 75:
+        high_flags.append(f'max_possible={pre_exam["max_possible_grade"]:.1f}')
+
+    medium_flags = []
+    if att_risk == 'Medium':
+        medium_flags.append(f'attendance_grade={attendance}')
+    if 65 <= class_standing < 75:
+        medium_flags.append(f'quiz={class_standing:.0f}')
+    if 65 <= task_performance < 75:
+        medium_flags.append(f'lab={task_performance:.0f}')
+    if 60 <= exam_score < 75:
+        medium_flags.append(f'exam={exam_score:.0f}')
+
+    if high_flags:
         risk_level = 'High'
-    elif pre_exam['exam_needed'] > 85:
+    elif medium_flags:
         risk_level = 'Medium'
     else:
         risk_level = 'Low'
@@ -416,8 +493,9 @@ def simulate_what_if(session, class_standing, exam_score, task_performance,
     predicted_grade = max(0, min(100, round(predicted_grade, 2)))
 
     tips = []
-    if attendance < 80:
-        tips.append('Improving attendance to 90%+ shows better engagement and commitment.')
+    if attendance <= 80:
+        present = max(0, (attendance - 50) // 10)
+        tips.append(f'Attendance grade is {attendance} ({int(present)}/5 meetings). Attending more meetings improves risk level.')
     if class_standing < 75:
         tips.append('Raising Class Standing above 75 through quizzes would contribute to passing (20% weight).')
     if exam_score < 75:

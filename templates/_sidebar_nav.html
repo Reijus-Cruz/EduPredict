@@ -31,6 +31,11 @@
             <i class="bi bi-heart-pulse"></i> Interventions
         </a>
     </li>
+    <li class="nav-item">
+        <a href="{{ url_for('attendance') }}" class="nav-link {{ 'active' if request.endpoint == 'attendance' }}">
+            <i class="bi bi-calendar-check"></i> Attendance
+        </a>
+    </li>
     {% elif current_user.is_parent %}
     <li class="nav-item">
         <a href="{{ url_for('student_profile', student_id=current_user.student_id) }}" class="nav-link {{ 'active' if request.endpoint == 'student_profile' }}">
@@ -40,6 +45,11 @@
     <li class="nav-item">
         <a href="{{ url_for('class_records') }}" class="nav-link {{ 'active' if request.endpoint == 'class_records' }}">
             <i class="bi bi-journal-text"></i> Grades
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{{ url_for('parent_attendance') }}" class="nav-link {{ 'active' if request.endpoint == 'parent_attendance' }}">
+            <i class="bi bi-calendar-check"></i> Attendance
         </a>
     </li>
     <li class="nav-item">

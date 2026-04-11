@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}My Child's Attendance – EduPredict{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-calendar-check me-2"></i>Attendance Monitoring</h4>
+</div>
+
+<!-- Student Information -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="small text-muted text-uppercase fw-semibold">Student Name</div>
+                <div class="fw-bold fs-5">{{ student.name }}</div>
+            </div>
+            <div class="col-md-4">
+                <div class="small text-muted text-uppercase fw-semibold">Section</div>
+                <div class="fw-bold fs-5">{{ student.section or '—' }}</div>
+            </div>
+            <div class="col-md-4">
+                <div class="small text-muted text-uppercase fw-semibold">Term</div>
+                <form method="get" action="{{ url_for('parent_attendance') }}" class="d-flex align-items-center gap-2 mt-1">
+                    <select name="term" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+                        <option value="Prelim" {{ 'selected' if current_term == 'Prelim' }}>Prelim</option>
+                        <option value="Midterm" {{ 'selected' if current_term == 'Midterm' }}>Midterm</option>
+                        <option value="Finals" {{ 'selected' if current_term == 'Finals' }}>Finals</option>
+                    </select>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Attendance Record Table -->
+<div class="card mb-4">
+    <div class="card-header fw-semibold">
+        <i class="bi bi-list-check me-1"></i>Attendance Record — {{ current_term }}
+    </div>
+    {% if meetings %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th style="width:100px">Meeting</th>
+                    <th>Date</th>
+                    <th class="text-center">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in meetings %}
+                <tr>
+                    <td class="fw-semibold">Meeting {{ m.number }}</td>
+                    <td>{{ m.date }}</td>
+                    <td class="text-center">
+                        {% if m.status == 'Present' %}
+                        <span class="badge bg-success px-3 py-2"><i class="bi bi-check-circle-fill me-1"></i>Present</span>
+                        {% else %}
+                        <span class="badge bg-danger px-3 py-2"><i class="bi bi-x-circle-fill me-1"></i>Absent</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body">
+        <div class="alert alert-secondary mb-0">
+            <i class="bi bi-info-circle me-1"></i>No attendance records yet for the <strong>{{ current_term }}</strong> term.
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Attendance Summary -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <div class="text-muted small text-uppercase fw-semibold">Total Presents</div>
+                <div class="fs-3 fw-bold text-success mt-1">{{ present }} / {{ total }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <div class="text-muted small text-uppercase fw-semibold">Total Absents</div>
+                <div class="fs-3 fw-bold text-danger mt-1">{{ absent }} / {{ total }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <div class="text-muted small text-uppercase fw-semibold">Attendance Grade</div>
+                <div class="fs-3 fw-bold text-primary mt-1">{{ grade }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <div class="text-muted small text-uppercase fw-semibold">Risk Status</div>
+                <div class="mt-1">
+                    {% if risk == 'High' %}
+                    <span class="badge bg-danger fs-6 px-3 py-2"><i class="bi bi-exclamation-triangle-fill me-1"></i>High Risk</span>
+                    {% elif risk == 'Medium' %}
+                    <span class="badge bg-warning text-dark fs-6 px-3 py-2"><i class="bi bi-exclamation-circle-fill me-1"></i>Medium Risk</span>
+                    {% else %}
+                    <span class="badge bg-success fs-6 px-3 py-2"><i class="bi bi-shield-fill-check me-1"></i>Low Risk</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scoring Reference -->
+<div class="alert alert-info py-2 small">
+    <i class="bi bi-info-circle me-1"></i>
+    <strong>How Attendance Grade Works:</strong> Base score of 50 + 10 points per meeting attended.
+    0 Present = 50 | 1 = 60 | 2 = 70 | 3 = 80 | 4 = 90 | 5 = 100 &nbsp;|&nbsp;
+    <span class="text-danger fw-semibold">50–60 = High Risk</span> &nbsp;
+    <span class="text-warning fw-semibold">70–80 = Medium Risk</span> &nbsp;
+    <span class="text-success fw-semibold">90–100 = Low Risk</span>
+</div>
+{% endblock %}

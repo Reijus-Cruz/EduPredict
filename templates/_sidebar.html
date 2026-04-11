@@ -25,6 +25,9 @@
         <a href="{{ url_for('interventions') }}" class="{{ 'active' if request.endpoint == 'interventions' }}">
             🩺 Interventions
         </a>
+        <a href="{{ url_for('attendance') }}" class="{{ 'active' if request.endpoint == 'attendance' }}">
+            📋 Attendance
+        </a>
         {% else %}
         <a href="{{ url_for('student_profile', student_id=current_user.student_id) }}" class="{{ 'active' if request.endpoint == 'student_profile' }}">
             🏠 My Profile

@@ -43,9 +43,6 @@
                     <td>{{ subject.name }}</td>
                     <td>
                         <span class="badge badge-{{ pred.risk_level|lower }}">{{ pred.risk_level }}</span>
-                        {% if pred.risk_level == 'High' and pred.max_possible_grade is not none %}
-                        <br><small class="text-danger">Cannot pass ({{ pred.max_possible_grade }}%)</small>
-                        {% endif %}
                     </td>
                     <td class="d-none d-md-table-cell">
                         {% if pred.max_possible_grade is not none %}{{ pred.max_possible_grade }}%{% else %}—{% endif %}
@@ -65,13 +62,24 @@
                     </td>
                     <td class="d-none d-md-table-cell">
                         {% if pred.recommendations %}
-                        <span class="badge bg-light text-dark border">{{ pred.recommendations|length }} action{{ 's' if pred.recommendations|length > 1 }}</span>
+                        <div class="d-flex flex-wrap gap-1">
+                            {% for rec in pred.recommendations[:2] %}
+                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 py-1 px-2" title="{{ rec.action }}">
+                                <i class="bi bi-lightbulb me-1"></i>{{ rec.action|truncate(30) }}
+                            </span>
+                            {% endfor %}
+                            {% if pred.recommendations|length > 2 %}
+                            <span class="badge bg-secondary bg-opacity-10 text-secondary py-1 px-2">+{{ pred.recommendations|length - 2 }} more</span>
+                            {% endif %}
+                        </div>
                         {% else %}
                         <span class="text-muted">—</span>
                         {% endif %}
                     </td>
                     <td class="text-end">
-                        <a href="{{ url_for('student_profile', student_id=student.id) }}" class="btn btn-sm btn-outline-primary">View</a>
+                        <a href="{{ url_for('student_profile', student_id=student.id) }}" class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                            <i class="bi bi-eye me-1"></i>View
+                        </a>
                     </td>
                 </tr>
                 {% endfor %}

@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}Attendance – EduPredict{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-calendar-check me-2"></i>Attendance (5-Meeting System)</h4>
+</div>
+
+<!-- Filters -->
+<form method="get" action="{{ url_for('attendance') }}" class="card mb-4" id="filterForm">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label fw-semibold small">Section</label>
+                <select name="section" class="form-select" onchange="this.form.submit()">
+                    <option value="">-- Select Section --</option>
+                    {% for sec in sections %}
+                    <option value="{{ sec }}" {{ 'selected' if sec == current_section }}>{{ sec }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold small">Term</label>
+                <select name="term" class="form-select" onchange="this.form.submit()">
+                    <option value="Prelim" {{ 'selected' if current_term == 'Prelim' }}>Prelim</option>
+                    <option value="Midterm" {{ 'selected' if current_term == 'Midterm' }}>Midterm</option>
+                    <option value="Finals" {{ 'selected' if current_term == 'Finals' }}>Finals</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-funnel me-1"></i>Load Students</button>
+            </div>
+        </div>
+    </div>
+</form>
+
+{% if current_section and students %}
+<!-- Scoring Reference -->
+<div class="alert alert-info py-2 small mb-3">
+    <i class="bi bi-info-circle me-1"></i>
+    <strong>Scoring:</strong> Base 50 + 10 per Present.
+    0P = 50 | 1P = 60 | 2P = 70 | 3P = 80 | 4P = 90 | 5P = 100 &nbsp;|&nbsp;
+    <span class="text-danger fw-semibold">50-60 = High Risk</span> &nbsp;
+    <span class="text-warning fw-semibold">70-80 = Medium Risk</span> &nbsp;
+    <span class="text-success fw-semibold">90-100 = Low Risk</span>
+</div>
+
+<!-- Attendance Form -->
+<form method="post" action="{{ url_for('save_attendance') }}">
+    <input type="hidden" name="section" value="{{ current_section }}">
+    <input type="hidden" name="term" value="{{ current_term }}">
+
+    <!-- Meeting date header -->
+    <div class="card mb-3">
+        <div class="card-header fw-semibold">
+            <i class="bi bi-calendar3 me-1"></i>Meeting Dates (Optional)
+        </div>
+        <div class="card-body">
+            <div class="row g-2">
+                {% for m in range(1, 6) %}
+                <div class="col">
+                    <label class="form-label small fw-semibold">Meeting {{ m }}</label>
+                    {% set saved_date = namespace(val='') %}
+                    {% for s in students %}
+                        {% set grid = attendance_grid.get(s.id, {}) %}
+                        {% if m in grid and grid[m].date and not saved_date.val %}
+                            {% set saved_date.val = grid[m].date.strftime('%Y-%m-%d') %}
+                        {% endif %}
+                    {% endfor %}
+                    <input type="date" class="form-control form-control-sm" name="date_{{ m }}" value="{{ saved_date.val }}">
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span class="fw-semibold">
+                <i class="bi bi-people me-1"></i>{{ current_section }} &mdash; {{ current_term }}
+            </span>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-success" onclick="markAllMeetings('Present')">
+                    <i class="bi bi-check-all me-1"></i>All Present
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="markAllMeetings('Absent')">
+                    <i class="bi bi-x-circle me-1"></i>All Absent
+                </button>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th style="width:35px">#</th>
+                        <th>Student Name</th>
+                        <th class="text-center">M1</th>
+                        <th class="text-center">M2</th>
+                        <th class="text-center">M3</th>
+                        <th class="text-center">M4</th>
+                        <th class="text-center">M5</th>
+                        <th class="text-center">Grade</th>
+                        <th class="text-center">Risk</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in students %}
+                    {% set grid = attendance_grid.get(s.id, {}) %}
+                    {% set stats = student_stats.get(s.id, {'present':0, 'absent':0, 'total':0, 'grade':50, 'risk':'High'}) %}
+                    <input type="hidden" name="student_ids" value="{{ s.id }}">
+                    <tr>
+                        <td class="text-muted">{{ loop.index }}</td>
+                        <td class="fw-semibold">{{ s.name }}</td>
+                        {% for m in range(1, 6) %}
+                        {% set rec = grid.get(m) %}
+                        <td class="text-center">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <input type="radio" class="btn-check att-radio" name="meeting_{{ s.id }}_{{ m }}"
+                                       id="p_{{ s.id }}_{{ m }}" value="Present"
+                                       data-student="{{ s.id }}"
+                                       {{ 'checked' if rec and rec.status == 'Present' }}>
+                                <label class="btn btn-outline-success btn-sm px-2" for="p_{{ s.id }}_{{ m }}" title="Present">
+                                    <i class="bi bi-check-lg"></i>
+                                </label>
+                                <input type="radio" class="btn-check att-radio" name="meeting_{{ s.id }}_{{ m }}"
+                                       id="a_{{ s.id }}_{{ m }}" value="Absent"
+                                       data-student="{{ s.id }}"
+                                       {{ 'checked' if rec and rec.status == 'Absent' }}>
+                                <label class="btn btn-outline-danger btn-sm px-2" for="a_{{ s.id }}_{{ m }}" title="Absent">
+                                    <i class="bi bi-x-lg"></i>
+                                </label>
+                            </div>
+                        </td>
+                        {% endfor %}
+                        <td class="text-center">
+                            <span class="fw-bold" id="grade_{{ s.id }}">{{ stats.grade }}</span>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge {{ 'bg-danger' if stats.risk == 'High' else ('bg-warning text-dark' if stats.risk == 'Medium' else 'bg-success') }}"
+                                  id="risk_{{ s.id }}">
+                                {{ stats.risk }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer text-end">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-save me-1"></i>Save Attendance
+            </button>
+        </div>
+    </div>
+</form>
+
+<!-- Summary Cards -->
+<div class="row g-3 mt-3">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h6 class="text-muted mb-1">Total Students</h6>
+                <h3 class="fw-bold text-primary">{{ students|length }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h6 class="text-muted mb-1">High Risk</h6>
+                {% set high_count = student_stats.values()|selectattr('risk', 'equalto', 'High')|list|length %}
+                <h3 class="fw-bold text-danger">{{ high_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h6 class="text-muted mb-1">Medium Risk</h6>
+                {% set med_count = student_stats.values()|selectattr('risk', 'equalto', 'Medium')|list|length %}
+                <h3 class="fw-bold text-warning">{{ med_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h6 class="text-muted mb-1">Low Risk</h6>
+                {% set low_count = student_stats.values()|selectattr('risk', 'equalto', 'Low')|list|length %}
+                <h3 class="fw-bold text-success">{{ low_count }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% elif current_section %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle me-1"></i>No students found in <strong>{{ current_section }}</strong>.
+</div>
+{% else %}
+<div class="alert alert-secondary">
+    <i class="bi bi-arrow-up-circle me-1"></i>Select a <strong>section</strong> and <strong>term</strong> above to manage attendance.
+</div>
+{% endif %}
+
+<script>
+function markAllMeetings(status) {
+    document.querySelectorAll(`input.att-radio[value="${status}"]`).forEach(r => { r.checked = true; });
+    recalcAll();
+}
+
+document.querySelectorAll('.att-radio').forEach(radio => {
+    radio.addEventListener('change', () => recalcStudent(radio.dataset.student));
+});
+
+function recalcStudent(sid) {
+    let present = 0;
+    for (let m = 1; m <= 5; m++) {
+        const el = document.querySelector(`input[name="meeting_${sid}_${m}"]:checked`);
+        if (el && el.value === 'Present') present++;
+    }
+    const grade = 50 + present * 10;
+    let risk, riskClass;
+    if (grade <= 60) { risk = 'High'; riskClass = 'bg-danger'; }
+    else if (grade <= 80) { risk = 'Medium'; riskClass = 'bg-warning text-dark'; }
+    else { risk = 'Low'; riskClass = 'bg-success'; }
+
+    const gradeEl = document.getElementById('grade_' + sid);
+    const riskEl = document.getElementById('risk_' + sid);
+    if (gradeEl) gradeEl.textContent = grade;
+    if (riskEl) { riskEl.textContent = risk; riskEl.className = 'badge ' + riskClass; }
+}
+
+function recalcAll() {
+    const sids = new Set();
+    document.querySelectorAll('.att-radio').forEach(r => sids.add(r.dataset.student));
+    sids.forEach(sid => recalcStudent(sid));
+}
+</script>
+{% endblock %}

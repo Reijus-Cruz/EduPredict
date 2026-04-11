@@ -16,21 +16,25 @@
         <div class="row g-3 mb-3">
             <div class="col-md-4">
                 <label class="form-label">Class Standing (20%): <strong id="val_cs">75</strong></label>
-                <input type="range" class="form-range" id="class_standing" min="0" max="100" value="75" oninput="document.getElementById('val_cs').textContent=this.value">
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">Exam Score (50%): <strong id="val_exam">75</strong></label>
-                <input type="range" class="form-range" id="exam_score" min="0" max="100" value="75" oninput="document.getElementById('val_exam').textContent=this.value">
+                <input type="range" class="form-range" id="class_standing" min="50" max="100" value="75" oninput="document.getElementById('val_cs').textContent=this.value">
             </div>
             <div class="col-md-4">
                 <label class="form-label">Task Performance (30%): <strong id="val_tp">75</strong></label>
-                <input type="range" class="form-range" id="task_performance" min="0" max="100" value="75" oninput="document.getElementById('val_tp').textContent=this.value">
+                <input type="range" class="form-range" id="task_performance" min="50" max="100" value="75" oninput="document.getElementById('val_tp').textContent=this.value">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Exam Score (50%): <strong id="val_exam">75</strong></label>
+                <input type="range" class="form-range" id="exam_score" min="50" max="100" value="75" oninput="document.getElementById('val_exam').textContent=this.value">
             </div>
         </div>
         <div class="row g-3 mb-3">
-            <div class="col-md-4">
-                <label class="form-label">Attendance (%): <strong id="val_att">90</strong></label>
-                <input type="range" class="form-range" id="attendance" min="0" max="100" value="90" oninput="document.getElementById('val_att').textContent=this.value">
+            <div class="col-md-6">
+                <label class="form-label">Meetings Present (out of 5): <strong id="val_meetings">5</strong></label>
+                <input type="range" class="form-range" id="meetings_present" min="0" max="5" step="1" value="5" oninput="updateAttGrade()">
+                <div class="small text-muted mt-1">
+                    Attendance Grade: <strong id="val_att_grade">100</strong> &nbsp;|&nbsp;
+                    Risk: <span id="val_att_risk" class="badge bg-success">Low</span>
+                </div>
             </div>
         </div>
         <button class="btn btn-primary" onclick="simulate()"><i class="bi bi-play-circle me-1"></i>Simulate</button>
@@ -78,12 +82,25 @@
 <script>
 let fiChartInstance = null;
 
+function updateAttGrade() {
+    const meetings = +document.getElementById('meetings_present').value;
+    document.getElementById('val_meetings').textContent = meetings;
+    const grade = 50 + meetings * 10;
+    document.getElementById('val_att_grade').textContent = grade;
+    const riskEl = document.getElementById('val_att_risk');
+    if (grade <= 60) { riskEl.textContent = 'High'; riskEl.className = 'badge bg-danger'; }
+    else if (grade <= 80) { riskEl.textContent = 'Medium'; riskEl.className = 'badge bg-warning text-dark'; }
+    else { riskEl.textContent = 'Low'; riskEl.className = 'badge bg-success'; }
+}
+
 function simulate() {
+    const meetings = +document.getElementById('meetings_present').value;
+    const attGrade = 50 + meetings * 10;
     const body = {
         class_standing: +document.getElementById('class_standing').value,
         exam_score: +document.getElementById('exam_score').value,
         task_performance: +document.getElementById('task_performance').value,
-        attendance: +document.getElementById('attendance').value,
+        attendance: attGrade,
     };
     fetch('/api/what-if', {
         method: 'POST',
