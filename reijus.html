@@ -10,8 +10,19 @@
     <label for="">username</label>
     <input type="text" placeholder="enter your username"> 
     <label for="">password</label>
-    <input type="password" placeholder="enter your password">
+    <input type="password" id="password" placeholder="enter your password">
+    <input type="checkbox" id="showPassword" onclick="togglePassword()"> Show Password
     <button>Login</button>
+    <script>
+    function togglePassword() {
+        var pwd = document.getElementById("password");
+        if (pwd.type === "password") {
+            pwd.type = "text";
+        } else {
+            pwd.type = "password";
+        }
+    }
+    </script>
 <!-- MAIN -->
 </body>
 </html>
